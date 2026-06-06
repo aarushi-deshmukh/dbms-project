@@ -90,7 +90,7 @@
 <script>
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { fetchProducts as getProducts, fetchCart, addToCart as addCartItem, fetchWishlist, addToWishlist as addWishItem } from "@/services";
+import { fetchProducts as getProducts, fetchCart, addToCart as addCartItem, fetchWishlist, addWishlistItem as addWishItem } from "@/services";
 
 export default {
   setup() {
@@ -188,7 +188,16 @@ export default {
     });
 
     return {
-      filterCategory, goToDetails, addToCart, addToWishlist, changeQty
+      filterCategory,
+      goToDetails,
+      addToCart,
+      addToWishlist,
+      changeQty,
+      selectedCategory,
+      categories,
+      loading,
+      error,
+      filteredProducts
     };
   }
 };
