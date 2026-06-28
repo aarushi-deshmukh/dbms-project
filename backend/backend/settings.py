@@ -54,6 +54,14 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+# Production Railway deployment hosts
+if not DEBUG:
+    ALLOWED_HOSTS += [
+        host.strip()
+        for host in get_env_variable('RAILWAY_ALLOWED_HOSTS', '').split(',')
+        if host.strip()
+    ]
+
 
 # Application definition
 
@@ -139,11 +147,18 @@ DATABASES = {
     )
 }
 
-# Apply PostgreSQL specific options (e.g. SSL require for Neon)
+# Use transactions in production
+if not DEBUG:
+    DATABASES['default']['ATOMIC_REQUESTS'] = True
+
+# PostgreSQL-specific configuration for Neon
 if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
-    DATABASES['default']['OPTIONS'] = {
-        'sslmode': 'require',
-    }
+    # Neon requires SSL mode
+    if 'OPTIONS' not in DATABASES['default']:
+        DATABASES['default']['OPTIONS'] = {}
+    
+    DATABASES['default']['OPTIONS']['sslmode'] = 'require' if not DEBUG else 'prefer'
+    DATABASES['default']['OPTIONS']['connect_timeout'] = 10
 
 
 

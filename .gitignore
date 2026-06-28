@@ -38,3 +38,10 @@ frontend/.vscode/
 backend/backend/__pycache__/
 backend/api/__pycache__/
 *.pyc
+
+# Django
+backend/db.sqlite3
+backend/staticfiles/
+backend/.env
+backend/.env.local
+backend/*.sqlite3

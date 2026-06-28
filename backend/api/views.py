@@ -2,13 +2,20 @@ from rest_framework.decorators import api_view, permission_classes, throttle_cla
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
+from rest_framework.exceptions import ValidationError, PermissionDenied, NotFound
 from .models import Buyer, Seller, Product, Cart, CartItem, Wishlist
 from .serializers import (
     ProductSerializer,
     SignInSerializer,
     BuyerSignupSerializer,
     SellerSignupSerializer,
+    ShippingAddressSerializer,
+    OrderSerializer,
+    CheckoutSerializer,
+    SellerOrderItemSerializer,
 )
+from .permissions import IsBuyer, IsSeller
+from . import services
 from django.contrib.auth.models import User
 from rest_framework import status
 from django.contrib.auth.hashers import check_password
@@ -19,7 +26,7 @@ logger = logging.getLogger('api')
 
 @api_view(['GET'])
 def products(request):
-    items = Product.objects.all()
+    items = Product.objects.all().select_related('seller')
     serializer = ProductSerializer(items, many=True)
     return Response(serializer.data)
 
@@ -147,14 +154,14 @@ def signup_seller(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def get_products(request):
-    products = Product.objects.all()
+    products = Product.objects.all().select_related('seller')
     serializer = ProductSerializer(products, many=True)
     # Frontend expects an array as the response body for products
     return Response(serializer.data)
 
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsBuyer])
 def add_to_cart(request):
     data = request.data
     product_id = data.get("product_id")
@@ -185,14 +192,14 @@ def add_to_cart(request):
     })
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsBuyer])
 def get_cart(request):
     buyer = Buyer.objects.get(user=request.user)
     cart = Cart.objects.filter(buyer=buyer).first()
     if not cart:
         return Response({'items': []})
 
-    items = CartItem.objects.filter(cart=cart)
+    items = CartItem.objects.filter(cart=cart).select_related('product__seller')
     data = [
         {
             'product_id': item.product.id,
@@ -209,7 +216,7 @@ def get_cart(request):
     return Response({'items': data})
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsBuyer])
 def add_to_wishlist(request):
 
     data = request.data
@@ -228,10 +235,10 @@ def add_to_wishlist(request):
     return Response({"message": "Added to wishlist"})
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsBuyer])
 def get_wishlist(request):
     buyer = Buyer.objects.get(user=request.user)
-    items = Wishlist.objects.filter(buyer=buyer)
+    items = Wishlist.objects.filter(buyer=buyer).select_related('product')
 
     data = [
         {
@@ -246,7 +253,7 @@ def get_wishlist(request):
     return Response({'items': data})
 
 @api_view(["DELETE"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsBuyer])
 def remove_from_cart(request, product_id):
 
     try:
@@ -270,7 +277,7 @@ def remove_from_cart(request, product_id):
         )
     
 @api_view(["DELETE"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsBuyer])
 def remove_from_wishlist(request, product_id):
 
     try:
@@ -331,7 +338,7 @@ def profile(request):
     return Response({"error": "Profile not found"}, status=404)
 
 @api_view(["POST"])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsSeller])
 def add_product(request):
 
     try:
@@ -362,7 +369,7 @@ def add_product(request):
 @api_view(["GET"])
 def get_product(request, id):
     try:
-        product = Product.objects.get(id=id)
+        product = Product.objects.select_related('seller').get(id=id)
 
         return Response({
             "id": product.id,
@@ -377,3 +384,203 @@ def get_product(request, id):
 
     except Product.DoesNotExist:
         return Response({"error": "Product not found"}, status=404)
+
+
+# ── Phase 3: Shipping Addresses ───────────────────────────────────────────────
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated, IsBuyer])
+def shipping_addresses(request):
+    """List all shipping addresses for the authenticated buyer, or create a new one."""
+    if request.method == 'GET':
+        qs = services.get_shipping_addresses(request.user)
+        serializer = ShippingAddressSerializer(qs, many=True)
+        return Response({'success': True, 'data': serializer.data, 'error': None})
+
+    # POST
+    serializer = ShippingAddressSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    address = services.create_shipping_address(request.user, serializer.validated_data)
+    return Response(
+        {'success': True, 'data': ShippingAddressSerializer(address).data, 'error': None},
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(['PUT', 'DELETE'])
+@permission_classes([IsAuthenticated, IsBuyer])
+def shipping_address_detail(request, address_id):
+    """Update or delete a specific shipping address owned by the authenticated buyer."""
+    if request.method == 'DELETE':
+        services.delete_shipping_address(request.user, address_id)
+        return Response({'success': True, 'message': 'Address deleted.', 'error': None})
+
+    # PUT
+    serializer = ShippingAddressSerializer(data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    address = services.update_shipping_address(request.user, address_id, serializer.validated_data)
+    return Response({'success': True, 'data': ShippingAddressSerializer(address).data, 'error': None})
+
+
+# ── Phase 3: Checkout & Orders ────────────────────────────────────────────────
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsBuyer])
+def place_order(request):
+    """
+    POST /api/place-order/
+    Converts the buyer's active cart into a confirmed order (atomic).
+    Body (all optional):
+      { "shipping_address_id": <int|null>, "notes": "<str>" }
+    """
+    serializer = CheckoutSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    try:
+        order = services.place_order_from_cart(
+            user=request.user,
+            shipping_address_id=serializer.validated_data.get('shipping_address_id'),
+            notes=serializer.validated_data.get('notes'),
+        )
+    except ValidationError as exc:
+        return Response(
+            {'success': False, 'message': exc.detail, 'data': None, 'error': str(exc.detail), 'code': 'checkout_failed'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response(
+        {
+            'success': True,
+            'message': 'Order placed successfully.',
+            'data': OrderSerializer(order).data,
+            'error': None,
+            'code': 'order_placed',
+        },
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsBuyer])
+def order_history(request):
+    """GET /api/orders/ — Returns the authenticated buyer's full order history."""
+    orders = services.get_buyer_orders(request.user)
+    serializer = OrderSerializer(orders, many=True)
+    return Response({'success': True, 'data': serializer.data, 'error': None})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsBuyer])
+def cancel_order_view(request, order_id):
+    """
+    POST /api/orders/<order_id>/cancel/
+    Cancels a pending or confirmed order and restores stock.
+    """
+    try:
+        order = services.cancel_order(request.user, order_id)
+    except ValidationError as exc:
+        return Response(
+            {'success': False, 'message': exc.detail, 'data': None, 'error': str(exc.detail), 'code': 'cancel_failed'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response({
+        'success': True,
+        'message': 'Order cancelled successfully.',
+        'data': OrderSerializer(order).data,
+        'error': None,
+        'code': 'order_cancelled',
+    })
+
+
+# ── Phase 3: Product Deletion ─────────────────────────────────────────────────
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated, IsSeller])
+def delete_product(request, product_id):
+    """
+    DELETE /api/products/<product_id>/
+    Standard ID-based product deletion. The seller must own the product.
+    Phase 5 migration target — this is the permanent endpoint.
+    """
+    try:
+        services.delete_seller_product(request.user, product_id)
+    except PermissionDenied as exc:
+        return Response(
+            {'success': False, 'message': str(exc.detail), 'error': str(exc.detail), 'code': 'permission_denied'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    return Response({
+        'success': True,
+        'message': 'Product deleted successfully.',
+        'error': None,
+        'code': 'product_deleted',
+    })
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated, IsSeller])
+def remove_product_legacy(request, name, brand):
+    """
+    DELETE /api/remove-product/<name>/<brand>/
+    Legacy compatibility endpoint. Resolves name+brand to a product ID,
+    validates seller ownership, then delegates to the same core deletion logic.
+
+    COMPATIBILITY LAYER — do not extend. Migrate the frontend to
+    DELETE /api/products/<id>/ in Phase 5 and then remove this view.
+    """
+    try:
+        services.resolve_and_delete_product_by_name_brand(request.user, name, brand)
+    except NotFound as exc:
+        return Response(
+            {'success': False, 'message': str(exc.detail), 'error': str(exc.detail), 'code': 'not_found'},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+    except PermissionDenied as exc:
+        return Response(
+            {'success': False, 'message': str(exc.detail), 'error': str(exc.detail), 'code': 'permission_denied'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    return Response({
+        'success': True,
+        'message': 'Product deleted successfully.',
+        'error': None,
+        'code': 'product_deleted',
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsSeller])
+def seller_products(request):
+    """
+    GET /api/seller/products/
+    Returns products owned by the authenticated seller. Thin controller.
+    """
+    products_qs = services.get_seller_products(request.user)
+    serializer = ProductSerializer(products_qs, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsSeller])
+def seller_orders(request):
+    """
+    GET /api/seller/orders/
+    Returns fulfillment items for orders containing the seller's products. Thin controller.
+    """
+    order_items_qs = services.get_seller_orders(request.user)
+    serializer = SellerOrderItemSerializer(order_items_qs, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsSeller])
+def seller_stats(request):
+    """
+    GET /api/seller/stats/
+    Returns calculated portfolio analytics for the seller. Thin controller.
+    """
+    stats_data = services.get_seller_stats(request.user)
+    return Response(stats_data)

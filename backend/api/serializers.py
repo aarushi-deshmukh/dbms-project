@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import Product, Buyer, Seller, CartItem, Wishlist
+from .models import Product, Buyer, Seller, CartItem, Wishlist, ShippingAddress, Order, OrderItem
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -17,6 +17,7 @@ class ProductSerializer(serializers.ModelSerializer):
             'stock',
             'category',
             'image',
+            'brand',
             'created_at',
             'seller_company_name',
         ]
@@ -148,3 +149,116 @@ class SellerSignupSerializer(serializers.Serializer):
 
         validate_password(password)
         return attrs
+
+
+# ── Phase 3: Shipping, Orders & Checkout ─────────────────────────────────────
+
+class ShippingAddressSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShippingAddress
+        fields = [
+            'id',
+            'recipient_name',
+            'phone_number',
+            'address',
+            'city',
+            'state',
+            'country',
+            'pincode',
+            'is_default',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    """
+    Serializes an individual item within an order.
+    Captures product name and the unit price locked at order-creation time.
+    """
+    product_id = serializers.IntegerField(source='product.id', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            'id',
+            'product_id',
+            'product_name',
+            'product_image',
+            'quantity',
+            'unit_price',
+            'total_price',
+        ]
+
+    def get_product_image(self, obj):
+        return obj.product.image.url if obj.product.image else None
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    """Full order representation including nested line items."""
+    items = OrderItemSerializer(many=True, read_only=True)
+    shipping_address = ShippingAddressSerializer(read_only=True)
+
+    class Meta:
+        model = Order
+        fields = [
+            'id',
+            'order_number',
+            'status',
+            'total_amount',
+            'tax_amount',
+            'shipping_cost',
+            'notes',
+            'shipping_address',
+            'items',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'order_number', 'created_at', 'updated_at']
+
+
+class CheckoutSerializer(serializers.Serializer):
+    """
+    Validates the request body for POST /api/place-order/.
+    All fields are optional to maintain frontend compatibility:
+    the service layer will fall back to the buyer's default address
+    or auto-generate one from their profile if not provided.
+    """
+    shipping_address_id = serializers.IntegerField(required=False, allow_null=True)
+    notes = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+
+class SellerOrderItemSerializer(serializers.ModelSerializer):
+    """
+    Serializer for order items containing products belonging to a seller.
+    Exposes order details, buyer email/name, and unit/total pricing.
+    """
+    order_number = serializers.CharField(source='order.order_number', read_only=True)
+    status = serializers.CharField(source='order.status', read_only=True)
+    buyer_name = serializers.SerializerMethodField()
+    buyer_email = serializers.EmailField(source='order.buyer.user.email', read_only=True)
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    created_at = serializers.DateTimeField(source='order.created_at', read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = [
+            'id',
+            'order_number',
+            'status',
+            'buyer_name',
+            'buyer_email',
+            'product_name',
+            'quantity',
+            'unit_price',
+            'total_price',
+            'created_at',
+        ]
+
+    def get_buyer_name(self, obj):
+        buyer_user = obj.order.buyer.user
+        name = f"{buyer_user.first_name} {buyer_user.last_name}".strip()
+        return name if name else buyer_user.username
+

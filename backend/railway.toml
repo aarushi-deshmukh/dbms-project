@@ -1,0 +1,14 @@
+# Railway deployment configuration
+# This file configures the Django backend for deployment on Railway
+
+[build]
+# Build command - install dependencies and collect static files
+builder = "dockerfile"
+
+[deploy]
+# Start command - run Gunicorn with Railway environment variables
+startCommand = "python manage.py migrate --noinput && gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --workers 4"
+
+# Environment variables for Railway
+[env]
+DJANGO_ENV = "production"
