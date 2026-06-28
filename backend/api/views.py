@@ -53,10 +53,15 @@ def signin(request):
             return Response({'success': False, 'message': 'Seller account not found', 'data': None, 'error': 'Seller account not found', 'code': 'account_not_found'}, status=status.HTTP_404_NOT_FOUND)
 
     refresh = RefreshToken.for_user(user)
-
+    # Keep the legacy wrapper but also expose tokens and account_type at top-level
     return Response({
         'success': True,
         'message': 'Signed in successfully',
+        'user_id': user.id,
+        'email': user.email,
+        'account_type': account_type,
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
         'data': {
             'user_id': user.id,
             'email': user.email,
@@ -144,13 +149,8 @@ def signup_seller(request):
 def get_products(request):
     products = Product.objects.all()
     serializer = ProductSerializer(products, many=True)
-    return Response({
-        'success': True,
-        'message': 'Product list retrieved successfully',
-        'data': serializer.data,
-        'error': None,
-        'code': 'products_listed',
-    })
+    # Frontend expects an array as the response body for products
+    return Response(serializer.data)
 
 
 @api_view(["POST"])
@@ -189,15 +189,8 @@ def add_to_cart(request):
 def get_cart(request):
     buyer = Buyer.objects.get(user=request.user)
     cart = Cart.objects.filter(buyer=buyer).first()
-
     if not cart:
-        return Response({
-            'success': True,
-            'message': 'Cart retrieved successfully',
-            'data': {'items': []},
-            'error': None,
-            'code': 'cart_empty',
-        })
+        return Response({'items': []})
 
     items = CartItem.objects.filter(cart=cart)
     data = [
@@ -207,17 +200,13 @@ def get_cart(request):
             'price': float(item.product.price),
             'quantity': item.quantity,
             'image': item.product.image.url if item.product.image else None,
+            'brand': item.product.seller.company_name if item.product.seller else None,
         }
         for item in items
     ]
 
-    return Response({
-        'success': True,
-        'message': 'Cart retrieved successfully',
-        'data': {'items': data},
-        'error': None,
-        'code': 'cart_retrieved',
-    })
+    # Frontend expects `res.data.items`
+    return Response({'items': data})
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -235,6 +224,7 @@ def add_to_wishlist(request):
         product=product
     )
 
+    # preserve simple message shape for existing callers
     return Response({"message": "Added to wishlist"})
 
 @api_view(["GET"])
@@ -252,14 +242,8 @@ def get_wishlist(request):
         }
         for item in items
     ]
-
-    return Response({
-        'success': True,
-        'message': 'Wishlist retrieved successfully',
-        'data': {'items': data},
-        'error': None,
-        'code': 'wishlist_retrieved',
-    })
+    # Frontend expects `res.data.items`
+    return Response({'items': data})
 
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])

@@ -1,12 +1,90 @@
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
-from .models import Product, Buyer, Seller
+from .models import Product, Buyer, Seller, CartItem, Wishlist
+
 
 class ProductSerializer(serializers.ModelSerializer):
+    seller_company_name = serializers.CharField(source='seller.company_name', read_only=True)
+
     class Meta:
         model = Product
-        fields = '__all__'
+        fields = [
+            'id',
+            'name',
+            'description',
+            'price',
+            'stock',
+            'category',
+            'image',
+            'created_at',
+            'seller_company_name',
+        ]
+
+
+class ProductCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Product
+        fields = [
+            'name',
+            'description',
+            'price',
+            'stock',
+            'category',
+            'image',
+        ]
+
+
+class CartItemSerializer(serializers.ModelSerializer):
+    product_id = serializers.IntegerField(source='product.id', read_only=True)
+    name = serializers.CharField(source='product.name', read_only=True)
+    price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CartItem
+        fields = [
+            'product_id',
+            'name',
+            'price',
+            'quantity',
+            'image',
+        ]
+
+    def get_image(self, obj):
+        return obj.product.image.url if obj.product.image else None
+
+
+class WishlistItemSerializer(serializers.ModelSerializer):
+    product_id = serializers.IntegerField(source='product.id', read_only=True)
+    name = serializers.CharField(source='product.name', read_only=True)
+    price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
+    image = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Wishlist
+        fields = [
+            'product_id',
+            'name',
+            'price',
+            'image',
+        ]
+
+    def get_image(self, obj):
+        return obj.product.image.url if obj.product.image else None
+
+
+class ProfileSerializer(serializers.Serializer):
+    account_type = serializers.CharField()
+    email = serializers.EmailField()
+    name = serializers.CharField(required=False)
+    company_name = serializers.CharField(required=False)
+    phone = serializers.CharField(required=False)
+    address = serializers.CharField()
+    city = serializers.CharField()
+    country = serializers.CharField()
+    pincode = serializers.CharField()
+    age = serializers.IntegerField(required=False)
 
 
 class SignInSerializer(serializers.Serializer):

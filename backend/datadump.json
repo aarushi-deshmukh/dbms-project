@@ -1,0 +1,191 @@
+[
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$p7DkLqKSZoUFdlQxyRSdhC$EtBEYqppijVSDfIv22SzukXfhTgrQlUl9vSiJ1rygaQ=",
+        "last_login": "2026-03-17T07:28:36.364Z",
+        "is_superuser": false,
+        "username": "aarushi_deshmukh",
+        "first_name": "Aarushi",
+        "last_name": "Deshmukh",
+        "email": "aarushideshmukh8@gmail.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-03-16T16:40:58.544Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "auth.user",
+    "fields": {
+        "password": "pbkdf2_sha256$1200000$KxbJOmwQA56BZEFteYGegR$JDhtGQXEJCievLEq0doSbe+L1o9lkW8f31jvNoEUUbM=",
+        "last_login": null,
+        "is_superuser": false,
+        "username": "aarushideshmukh85@gmail.com",
+        "first_name": "",
+        "last_name": "",
+        "email": "aarushideshmukh85@gmail.com",
+        "is_staff": false,
+        "is_active": true,
+        "date_joined": "2026-03-20T12:31:04.151Z",
+        "groups": [],
+        "user_permissions": []
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "400z2c6x2srm8uuymubd6itk7ek8v30c",
+    "fields": {
+        "session_data": ".eJxVjEEOwiAQRe_C2hCgFMSl-56BDMyMVA0kpV0Z765NutDtf-_9l4iwrSVunZY4o7gII06_W4L8oLoDvEO9NZlbXZc5yV2RB-1yakjP6-H-HRTo5VuHgT2lZE1g9tYYBcgO2SsbyBEqF7IdMyZmd2bAbAicDiNmbbwetBfvDwczOKM:1w2Oqy:xG7eIhnOCjcbfO_6NMZJFSb9fKAVG7GyoD-rDM-f0rs",
+        "expire_date": "2026-03-31T07:28:36.420Z"
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "5ucmcvrpkposf45h0dy8lreljk5i6ndw",
+    "fields": {
+        "session_data": ".eJxVjEEOwiAQRe_C2hCgFMSl-56BDMyMVA0kpV0Z765NutDtf-_9l4iwrSVunZY4o7gII06_W4L8oLoDvEO9NZlbXZc5yV2RB-1yakjP6-H-HRTo5VuHgT2lZE1g9tYYBcgO2SsbyBEqF7IdMyZmd2bAbAicDiNmbbwetBfvDwczOKM:1w2DpB:wjI0NaBcFKmAOBqI-9WsbXGwrT0dkJBVHm5-AessLW4",
+        "expire_date": "2026-03-30T19:42:01.422Z"
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "7lvswlbcn2mglraq6rot6qjxji0ka3br",
+    "fields": {
+        "session_data": ".eJxVjEEOwiAQRe_C2hCgFMSl-56BDMyMVA0kpV0Z765NutDtf-_9l4iwrSVunZY4o7gII06_W4L8oLoDvEO9NZlbXZc5yV2RB-1yakjP6-H-HRTo5VuHgT2lZE1g9tYYBcgO2SsbyBEqF7IdMyZmd2bAbAicDiNmbbwetBfvDwczOKM:1w2D7H:saAs_-0U1Kf4GpxWreRfiwmfD2CMM9aJc_otU2i8Tx8",
+        "expire_date": "2026-03-30T18:56:39.567Z"
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "9rru0aacffm7zqevwc0tphg9ydftbwzd",
+    "fields": {
+        "session_data": ".eJxVjEEOwiAQRe_C2hCgFMSl-56BDMyMVA0kpV0Z765NutDtf-_9l4iwrSVunZY4o7gII06_W4L8oLoDvEO9NZlbXZc5yV2RB-1yakjP6-H-HRTo5VuHgT2lZE1g9tYYBcgO2SsbyBEqF7IdMyZmd2bAbAicDiNmbbwetBfvDwczOKM:1w2D9u:ZS0mVu5C_RmABSjsVfdVkRW6bKhKUYVLe-i9oBiJqLs",
+        "expire_date": "2026-03-30T18:59:22.751Z"
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "azt3i7v4it6rm5kwn5ewkmy4hrgnx9cb",
+    "fields": {
+        "session_data": ".eJxVjEEOwiAQRe_C2hCgFMSl-56BDMyMVA0kpV0Z765NutDtf-_9l4iwrSVunZY4o7gII06_W4L8oLoDvEO9NZlbXZc5yV2RB-1yakjP6-H-HRTo5VuHgT2lZE1g9tYYBcgO2SsbyBEqF7IdMyZmd2bAbAicDiNmbbwetBfvDwczOKM:1w2DQn:fsq9h3OyOLlgohiFPygQubCiBVd7dU3lIw2xIJO-3rA",
+        "expire_date": "2026-03-30T19:16:49.666Z"
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "pz4xjfg0hrjtie1dgv0f41wukgcentvh",
+    "fields": {
+        "session_data": ".eJxVjEEOwiAQRe_C2hCgFMSl-56BDMyMVA0kpV0Z765NutDtf-_9l4iwrSVunZY4o7gII06_W4L8oLoDvEO9NZlbXZc5yV2RB-1yakjP6-H-HRTo5VuHgT2lZE1g9tYYBcgO2SsbyBEqF7IdMyZmd2bAbAicDiNmbbwetBfvDwczOKM:1w2D8l:Av9CD-mXl-r-tblnBFBGl0vpz9iv-rvFmKD3VG4ug8A",
+        "expire_date": "2026-03-30T18:58:11.222Z"
+    }
+},
+{
+    "model": "sessions.session",
+    "pk": "umv5sfoj2ewcgb2xlnynosn0ixufn0v1",
+    "fields": {
+        "session_data": ".eJxVjEEOwiAQRe_C2hCgFMSl-56BDMyMVA0kpV0Z765NutDtf-_9l4iwrSVunZY4o7gII06_W4L8oLoDvEO9NZlbXZc5yV2RB-1yakjP6-H-HRTo5VuHgT2lZE1g9tYYBcgO2SsbyBEqF7IdMyZmd2bAbAicDiNmbbwetBfvDwczOKM:1w2Dz4:tJY3WXcxFPMBEX2uYxUIjUiMdVzLH66_c0jLjB3ATD0",
+        "expire_date": "2026-03-30T19:52:14.694Z"
+    }
+},
+{
+    "model": "api.buyer",
+    "pk": 1,
+    "fields": {
+        "user": [
+            "aarushi_deshmukh"
+        ],
+        "age": 20,
+        "phone_number": "9028399567",
+        "address": "H-204, Ganeesham Phase-II",
+        "city": "Pune",
+        "country": "India",
+        "pincode": "411027"
+    }
+},
+{
+    "model": "api.seller",
+    "pk": 2,
+    "fields": {
+        "user": [
+            "aarushideshmukh85@gmail.com"
+        ],
+        "company_name": "Hushtag",
+        "contact_number": "9028399567",
+        "address": "H-204, Ganeesham Phase-II",
+        "city": "Pune",
+        "country": "India",
+        "pincode": "411027"
+    }
+},
+{
+    "model": "api.product",
+    "pk": 6,
+    "fields": {
+        "seller": 2,
+        "name": "trial",
+        "description": "idk",
+        "price": "20.00",
+        "stock": 8,
+        "category": "shoes",
+        "image": "",
+        "created_at": "2026-03-20T12:58:47.009Z"
+    }
+},
+{
+    "model": "api.product",
+    "pk": 7,
+    "fields": {
+        "seller": 2,
+        "name": "nike shoes",
+        "description": "Good shoes",
+        "price": "350.00",
+        "stock": 20,
+        "category": "shoes",
+        "image": "products/nike.jpg",
+        "created_at": "2026-03-20T13:06:27.534Z"
+    }
+},
+{
+    "model": "api.product",
+    "pk": 8,
+    "fields": {
+        "seller": 2,
+        "name": "phone",
+        "description": "2nd hand",
+        "price": "23.00",
+        "stock": 22,
+        "category": "electronics",
+        "image": "products/samsung.jpg",
+        "created_at": "2026-03-20T13:18:39.079Z"
+    }
+},
+{
+    "model": "api.cart",
+    "pk": 1,
+    "fields": {
+        "buyer": 1,
+        "created_at": "2026-03-17T08:28:39.723Z"
+    }
+},
+{
+    "model": "api.cartitem",
+    "pk": 11,
+    "fields": {
+        "cart": 1,
+        "product": 7,
+        "quantity": 2,
+        "added_at": "2026-03-20T15:25:53.996Z"
+    }
+},
+{
+    "model": "api.wishlist",
+    "pk": 6,
+    "fields": {
+        "buyer": 1,
+        "product": 8,
+        "added_at": "2026-03-20T15:27:27.862Z"
+    }
+}
+]
