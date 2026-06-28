@@ -2,9 +2,12 @@
 import { computed } from "vue"
 import { ref } from "vue"
 import { useRouter } from "vue-router"
+import { useAuthStore } from "@/stores/auth"
 
 const router = useRouter()
-const userType = computed(() => localStorage.getItem("user_type"))
+const authStore = useAuthStore()
+
+const userType = computed(() => authStore.userType)
 const showCategoryDropdown = ref(false)
 const searchQuery = ref("")
 
@@ -32,8 +35,8 @@ function goHome() {
 }
 
 function logout(){
-  localStorage.removeItem("user_type")
-  router.push("/")
+  authStore.logout()
+  router.push("/signin")
 }
 </script>
 

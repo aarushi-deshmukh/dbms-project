@@ -114,7 +114,7 @@
 </template>
 
 <script>
-import axios from "axios";
+import api from "@/api";
 
 export default {
   data() {
@@ -144,11 +144,11 @@ export default {
       this.message = "";
       this.error = "";
 
-      let apiUrl = "";
+      let apiPath = "";
       let formData = {};
 
       if (this.account_type === "Buyer") {
-        apiUrl = "http://127.0.0.1:8000/api/signup/buyer/";
+        apiPath = "signup/buyer/";
         formData = {
           first_name: this.first_name,
           last_name: this.last_name,
@@ -163,7 +163,7 @@ export default {
           city: this.city
         };
       } else if (this.account_type === "Seller") {
-        apiUrl = "http://127.0.0.1:8000/api/signup/seller/";
+        apiPath = "signup/seller/";
         formData = {
           email: this.email,
           password: this.password,
@@ -177,20 +177,25 @@ export default {
       }
 
       try {
-        const response = await axios.post(apiUrl, formData);
-        this.message = response.data.message;
+        const response = await api.post(apiPath, formData);
+        this.message = response.data.message || "Registration successful!";
 
         this.$emit("signup-success");
 
         setTimeout(() => {
-          if (this.account_type === "Buyer") {
-            this.$router.push("/");
-          } else {
-            this.$router.push("/");
-          }
+          this.$router.push("/signin");
         }, 1200);
       } catch (error) {
-        this.error = error.response?.data?.error || "Something went wrong!";
+        if (error.response?.data?.message) {
+          this.error = error.response.data.message;
+        } else if (error.response?.data?.error) {
+          this.error = error.response.data.error;
+        } else if (typeof error.response?.data === 'object') {
+          // Join validation error messages if any
+          this.error = Object.values(error.response.data).flat().join(" ");
+        } else {
+          this.error = "Something went wrong!";
+        }
       } finally {
         this.loading = false;
       }

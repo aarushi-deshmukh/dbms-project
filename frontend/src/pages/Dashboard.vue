@@ -86,13 +86,14 @@
 </template>
 
 <script>
-import axios from 'axios';
 import { ref, computed, onMounted, nextTick } from "vue";
 import { useRouter } from 'vue-router';
+import { useProductsStore } from '@/stores/products';
 
 export default {
   setup() {
     const router = useRouter();
+    const productsStore = useProductsStore();
     const products = ref([]);
     const searchQuery = ref("");
     const selectedCategory = ref("all");
@@ -150,8 +151,8 @@ export default {
 
     const fetchProducts = async () => {
       try {
-        const response = await axios.get("http://127.0.0.1:8000/api/products/");
-        products.value = response.data;
+        const data = await productsStore.fetchProducts();
+        products.value = data;
       } catch (err) {
         console.error("Failed to fetch products:", err);
       }
@@ -205,7 +206,7 @@ export default {
       
       canScrollLeft.value = container.scrollLeft > 10;
       canScrollRight.value = 
-        container.scrollLeft < (container.scrollWidth - container.clientWidth - 10);
+          container.scrollLeft < (container.scrollWidth - container.clientWidth - 10);
     };
 
     onMounted(async () => {

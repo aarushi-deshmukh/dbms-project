@@ -52,7 +52,8 @@
 </template>
 
 <script>
-import axios from "axios"
+import { useAuthStore } from "@/stores/auth"
+import { mapActions } from "pinia"
 
 export default {
   name: "SigninForm",
@@ -69,64 +70,44 @@ export default {
   },
 
   methods: {
+    ...mapActions(useAuthStore, ["login"]),
 
     setAccountType(type) {
       this.account_type = type
     },
 
     async submitForm() {
-
       this.loading = true
       this.error = ""
 
       try {
-
-        const response = await axios.post(
-          "http://127.0.0.1:8000/api/signin/",
-          {
-            email: this.email,
-            password: this.password,
-            account_type: this.account_type
-          }
+        const data = await this.login(
+          this.email,
+          this.password,
+          this.account_type
         )
-        const data = response.data
 
-        if (!data.success) {
-          this.error = data.error || "Login failed"
-          return
-        }
-
-        // Now safe to use account_type
         const accountType = data.account_type.toLowerCase()
-
-
-        // store JWT
-        localStorage.setItem("access", data.access)
-        localStorage.setItem("refresh", data.refresh)
-        localStorage.setItem("user_type", data.account_type.toLowerCase())
 
         // redirect based on role
         if (accountType === "buyer") {
           this.$router.push("/")
-
         } else if (accountType === "seller") {
-          this.$router.push("/")
-
+          this.$router.push("/my-products")
         } else {
           console.log("Unknown account type")
           this.error = "Unknown account type"
         }
 
       } catch (error) {
-
         console.log("Login error:", error)
-
-        if (error.response?.data?.error) {
+        if (error.response?.data?.message) {
+          this.error = error.response.data.message
+        } else if (error.response?.data?.error) {
           this.error = error.response.data.error
         } else {
-          this.error = "Login failed"
+          this.error = "Login failed. Please check your credentials."
         }
-
       } finally {
         this.loading = false
       }

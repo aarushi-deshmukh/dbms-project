@@ -19,8 +19,8 @@
         <div class="product-price">₹{{ product.price }}</div>
 
         <div class="stock-row">
-          <span class="stock-dot" :class="product.quantity > 0 ? 'dot--green' : 'dot--red'"></span>
-          <span class="stock-label">{{ product.quantity > 0 ? `${product.quantity} in stock` : 'Out of stock' }}</span>
+          <span class="stock-dot" :class="product.stock > 0 ? 'dot--green' : 'dot--red'"></span>
+          <span class="stock-label">{{ product.stock > 0 ? `${product.stock} in stock` : 'Out of stock' }}</span>
         </div>
 
         <p class="product-description">{{ product.description }}</p>
@@ -55,11 +55,15 @@
 import api from '@/api'
 import { ref, onMounted } from "vue";
 import { useRoute } from "vue-router";
+import { useCartStore } from "@/stores/cart";
+import { useWishlistStore } from "@/stores/wishlist";
 
 export default {
   setup() {
     const route = useRoute();
     const product = ref(null);
+    const cartStore = useCartStore();
+    const wishlistStore = useWishlistStore();
 
     const fetchProduct = async () => {
       const id = route.params.id;
@@ -73,10 +77,9 @@ export default {
     };
 
     const addToCart = async () => {
+      if (!product.value) return;
       try {
-        await api.post('cart/add/', {
-          product_id: product.value.id
-        });
+        await cartStore.addItem(product.value.id, 1);
         alert("Added to cart");
       } catch (err) {
         console.error('Add to cart error:', err);
@@ -84,10 +87,9 @@ export default {
     };
 
     const addToWishlist = async () => {
+      if (!product.value) return;
       try {
-        await api.post('wishlist/add/', {
-          product_id: product.value.id
-        });
+        await wishlistStore.addItem(product.value.id);
         alert("Added to wishlist");
       } catch (err) {
         console.error('Add to wishlist error:', err);

@@ -76,52 +76,35 @@
 </template>
 
 <script>
-import { fetchCart, removeCartItem, checkoutCart, fetchWishlist, addWishlistItem } from "@/services";
+import { useCartStore } from "@/stores/cart";
+import { useWishlistStore } from "@/stores/wishlist";
 
 export default {
-  data() {
-    return {
-      cart: [],
-      wishlist: [],
-      searchQuery: '',
-      selectedCategory: 'all',
-    }
-  },
-
   computed: {
+    cart() {
+      const cartStore = useCartStore();
+      return cartStore.items;
+    },
     cartTotal() {
-      return this.cart
-        .reduce((total, item) => total + (item.price * item.quantity), 0)
-        .toFixed(2)
+      const cartStore = useCartStore();
+      return cartStore.totalPrice.toFixed(2);
     }
   },
 
   methods: {
-
     async fetchCartItems() {
       try {
-        this.cart = await fetchCart();
+        const cartStore = useCartStore();
+        await cartStore.fetchCart();
       } catch {
         console.error("Failed to load cart");
       }
     },
 
-    async fetchWishlistItems() {
-      try {
-        this.wishlist = await fetchWishlist();
-      } catch {
-        console.error("Failed to load wishlist");
-      }
-    },
-
     async removeFromCart(product) {
       try {
-        await removeCartItem(product.product_id);
-
-        this.cart = this.cart.filter(
-          p => p.product_id !== product.product_id
-        );
-
+        const cartStore = useCartStore();
+        await cartStore.removeItem(product.product_id);
       } catch {
         console.error("Failed to remove item");
       }
@@ -129,13 +112,11 @@ export default {
 
     async addToWishlist(product) {
       try {
-        await addWishlistItem(product.product_id);
-
-        await this.fetchWishlistItems();
-        await this.removeFromCart(product);
-
-        this.$refs.headerRef?.refreshCounts();
-
+        const wishlistStore = useWishlistStore();
+        const cartStore = useCartStore();
+        
+        await wishlistStore.addItem(product.product_id);
+        await cartStore.removeItem(product.product_id);
       } catch {
         console.error("Failed to save for later");
       }
@@ -143,31 +124,21 @@ export default {
 
     async checkout() {
       try {
-        await checkoutCart(this.cart);
-
+        const cartStore = useCartStore();
+        await cartStore.checkout();
         alert("Order placed successfully!");
-        this.cart = [];
-
-        this.$refs.headerRef?.refreshCounts();
-
       } catch {
         alert("Failed to place order.");
       }
     },
 
     goHome() {
-      this.$router.push('/buyer-dashboard');
-    },
-
-    filterCategory(category) {
-      this.selectedCategory = category;
+      this.$router.push('/shopping');
     }
-
   },
 
   mounted() {
     this.fetchCartItems();
-    this.fetchWishlistItems();
   }
 }
 </script>

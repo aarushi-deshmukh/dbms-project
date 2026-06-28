@@ -71,68 +71,41 @@
 </template>
 
 <script>
-import { fetchWishlist, removeWishlistItem, fetchCart, addToCart as addCartItem } from "@/services";
+import { useWishlistStore } from "@/stores/wishlist";
+import { useCartStore } from "@/stores/cart";
 
 export default {
-  data() {
-    return {
-      wishlist: [],
-      cart: [],
-      searchQuery: '',
-      selectedCategory: 'all'
-    };
-  },
-
   computed: {
-    totalCartItems() {
-      return this.cart.length;
-    },
-    totalWishlistItems() {
-      return this.wishlist.length;
+    wishlist() {
+      const wishlistStore = useWishlistStore();
+      return wishlistStore.items;
     },
     totalValue() {
       return this.wishlist
-        .reduce((sum, item) => sum + (item.price * item.quantity), 0)
+        .reduce((sum, item) => sum + parseFloat(item.price), 0)
         .toFixed(2);
     }
   },
 
   methods: {
-
     async fetchWishlistItems() {
       try {
-        this.wishlist = await fetchWishlist();
+        const wishlistStore = useWishlistStore();
+        await wishlistStore.fetchWishlist();
       } catch {
         console.error("Failed to fetch wishlist");
       }
     },
 
-    async fetchCartItems() {
-      try {
-        this.cart = await fetchCart();
-      } catch {
-        console.error("Failed to fetch cart");
-      }
-    },
-
     goHome() {
-      window.location.href = '/buyer-dashboard';
-    },
-
-    filterCategory(category) {
-      this.selectedCategory = category;
+      this.$router.push('/shopping');
     },
 
     async removeFromWishlist(product) {
       try {
-        await removeWishlistItem(product.product_id || product.id);
-
-        this.wishlist = this.wishlist.filter(
-          p => (p.product_id || p.id) !== (product.product_id || product.id)
-        );
-
-        this.$refs.headerRef?.refreshCounts();
-
+        const wishlistStore = useWishlistStore();
+        const id = product.product_id || product.id;
+        await wishlistStore.removeItem(id);
       } catch {
         console.error("Failed to remove item");
       }
@@ -147,25 +120,27 @@ export default {
       }
 
       try {
-        await addCartItem(id, 1);
-
-        await this.fetchCartItems();
-        await this.removeFromWishlist(product);
-
-
+        const cartStore = useCartStore();
+        const wishlistStore = useWishlistStore();
+        await cartStore.addItem(id, 1);
+        await wishlistStore.removeItem(id);
       } catch (err) {
         console.error("Add to cart failed:", err);
       }
     },
+
     async addAllToCart() {
       try {
+        const cartStore = useCartStore();
+        const wishlistStore = useWishlistStore();
+        
         for (const item of this.wishlist) {
           const id = item.product_id || item.id;
-          await addCartItem(id, 1);
+          await cartStore.addItem(id, 1);
+          await wishlistStore.removeItem(id);
         }
 
         alert("All items added to cart");
-
       } catch (err) {
         console.error("Failed to add all to cart:", err);
       }
@@ -174,7 +149,6 @@ export default {
 
   mounted() {
     this.fetchWishlistItems();
-    this.fetchCartItems();
   }
 };
 </script>

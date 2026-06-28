@@ -53,8 +53,8 @@
               </div>
               <div class="detail-row">
                 <span class="detail-label">Quantity</span>
-                <span class="detail-value" :class="product.quantity <= 10 ? 'qty--low' : ''">
-                  {{ product.quantity }}
+                <span class="detail-value" :class="product.stock <= 10 ? 'qty--low' : ''">
+                  {{ product.stock }}
                 </span>
               </div>
             </div>
@@ -84,28 +84,23 @@
 
 <script>
 import { ref, computed, onMounted } from "vue";
-import axios from "axios";
+import { useProductsStore } from "@/stores/products";
 import { useRouter } from "vue-router";
 
 export default {
   setup() {
-    const products = ref([]);
+    const productsStore = useProductsStore();
     const searchQuery = ref("");
     const selectedCategory = ref("all");
-    const loading = ref(true);
     const showDeleteModal = ref(false);
     const productToDelete = ref(null);
     const router = useRouter();
 
     const fetchProducts = async () => {
       try {
-        loading.value = true;
-        const response = await axios.get("http://127.0.0.1:8000/api/products/");
-        products.value = response.data;
+        await productsStore.fetchSellerProducts();
       } catch (error) {
         console.error("Error fetching products:", error);
-      } finally {
-        loading.value = false;
       }
     };
 
@@ -117,8 +112,7 @@ export default {
     const removeProduct = async () => {
       try {
         const product = productToDelete.value;
-        await axios.delete(`http://127.0.0.1:8000/api/remove-product/${product.name}/${product.brand}/`);
-        products.value = products.value.filter(p => p.id !== product.id);
+        await productsStore.deleteProductLegacy(product.name, product.brand);
         showDeleteModal.value = false;
         productToDelete.value = null;
       } catch (error) {
@@ -135,6 +129,8 @@ export default {
 
     onMounted(fetchProducts);
 
+    const products = computed(() => productsStore.sellerProducts);
+
     const filteredProducts = computed(() =>
       products.value.filter(product =>
         (selectedCategory.value === "all" || product.category.toLowerCase() === selectedCategory.value.toLowerCase()) &&
@@ -143,10 +139,10 @@ export default {
       )
     );
 
-    const goToAddProducts = () => router.push("/add-products");
+    const goToAddProducts = () => router.push("/add-product");
 
     return {
-      products, searchQuery, selectedCategory, loading,
+      products, searchQuery, selectedCategory, loading: computed(() => productsStore.loading),
       showDeleteModal, productToDelete, filteredProducts,
       goToAddProducts, confirmRemoveProduct, removeProduct,
       editProduct, formatPrice

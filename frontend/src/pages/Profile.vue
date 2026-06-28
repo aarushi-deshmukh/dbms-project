@@ -152,12 +152,12 @@
 </template>
 
 <script>
-import api from '@/api'
+import { useProfileStore } from "@/stores/profile";
+import { useAuthStore } from "@/stores/auth";
 
 export default {
   data() {
     return {
-      loading: false,
       activeTab: 'profile',
       userProfile: {
         name: '',
@@ -168,6 +168,9 @@ export default {
     };
   },
   computed: {
+    loading() {
+      return useProfileStore().loading;
+    },
     accountType() {
       return this.userProfile.account_type || localStorage.getItem("user_type");
     },
@@ -200,32 +203,21 @@ export default {
   methods: {
     async fetchProfile() {
       try {
-
-        this.loading = true
-
-        const res = await api.get("profile/")
-
-        this.userProfile = res.data
-
+        const profileStore = useProfileStore();
+        const data = await profileStore.fetchProfile();
+        this.userProfile = { ...data };
       } catch (error) {
-        console.error("Failed to load profile:", error)
-      } finally {
-        this.loading = false
+        console.error("Failed to load profile:", error);
       }
     },
-
 
     formatLabel(key) {
       return key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
     },
     logout() {
-
-      localStorage.removeItem("access")
-      localStorage.removeItem("refresh")
-      localStorage.removeItem("user_type")
-
-      this.$router.push("/signin")
-
+      const authStore = useAuthStore();
+      authStore.logout();
+      this.$router.push("/signin");
     }
   },
   mounted() {

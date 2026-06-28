@@ -55,16 +55,19 @@
 </template>
 
 <script>
-import axios from 'axios';
+import { useOrdersStore } from "@/stores/orders";
 
 export default {
   data() {
     return {
-      orders: [],
       filterDays: 'all'
     };
   },
   computed: {
+    orders() {
+      const ordersStore = useOrdersStore();
+      return ordersStore.orders;
+    },
     filteredOrders() {
       if (this.filterDays === 'all') return this.orders;
 
@@ -79,8 +82,8 @@ export default {
   methods: {
     async fetchOrderHistory() {
       try {
-        const response = await axios.get('http://127.0.0.1:8000/api/history/');
-        this.orders = response.data.orders;
+        const ordersStore = useOrdersStore();
+        await ordersStore.fetchOrderHistory();
       } catch (error) {
         console.error("Error fetching order history:", error);
       }

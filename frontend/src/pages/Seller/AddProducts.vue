@@ -105,11 +105,15 @@
 </template>
 
 <script>
-import api from '@/api';
 import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useProductsStore } from '@/stores/products';
 
 export default {
   setup() {
+    const router = useRouter();
+    const productsStore = useProductsStore();
+
     const publishMessage = ref('Publish Product');
     const isPublishing = ref(false);
     const imagePreview = ref(null);
@@ -140,10 +144,18 @@ export default {
       publishMessage.value = 'Publishing...';
       try {
         const formData = new FormData();
-        Object.keys(newProduct.value).forEach(k => { if (newProduct.value[k]) formData.append(k, newProduct.value[k]); });
-        await api.post('add-product/', formData, { headers: { Authorization: `Bearer ${localStorage.getItem("access")}` } });
+        formData.append('name', newProduct.value.name);
+        formData.append('price', newProduct.value.price);
+        formData.append('category', newProduct.value.category);
+        formData.append('stock', newProduct.value.quantity); // Map quantity to stock
+        formData.append('description', newProduct.value.description);
+        if (newProduct.value.image) {
+          formData.append('image', newProduct.value.image);
+        }
+
+        await productsStore.addProduct(formData);
         publishMessage.value = 'Published!';
-        setTimeout(() => { window.location.href = '/my-products'; }, 1000);
+        setTimeout(() => { router.push('/my-products'); }, 1000);
       } catch (err) {
         console.error(err);
         publishMessage.value = 'Publish Product';
@@ -152,7 +164,7 @@ export default {
       }
     };
 
-    const goToMyProducts = () => { window.location.href = '/my-products'; };
+    const goToMyProducts = () => { router.push('/my-products'); };
 
     return { publishMessage, isPublishing, newProduct, imagePreview, isDragging, fileInput, triggerFileInput, handleFileSelect, handleDrop, removeImage, addProduct, goToMyProducts };
   }

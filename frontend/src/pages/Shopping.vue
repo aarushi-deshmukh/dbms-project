@@ -52,8 +52,8 @@
 
             <div class="price-row">
               <span class="price">₹{{ product.price }}</span>
-              <span class="stock-badge" :class="{ low: product.quantity < 10 }">
-                {{ product.quantity }} in stock
+              <span class="stock-badge" :class="{ low: product.stock < 10 }">
+                {{ product.stock }} in stock
               </span>
             </div>
 
@@ -90,33 +90,25 @@
 <script>
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { fetchProducts as getProducts, fetchCart, addToCart as addCartItem, fetchWishlist, addWishlistItem as addWishItem } from "@/services";
+import { useProductsStore } from "@/stores/products";
+import { useCartStore } from "@/stores/cart";
+import { useWishlistStore } from "@/stores/wishlist";
 
 export default {
   setup() {
     const router = useRouter();
+    const productsStore = useProductsStore();
+    const cartStore = useCartStore();
+    const wishlistStore = useWishlistStore();
+
     const products = ref([]);
     const searchQuery = ref("");
-    const loading = ref(true);
-    const error = ref(null);
-    const cartTotal = ref(0);
-    const wishlistTotal = ref(0);
     const selectedCategory = ref("all");
     const categories = ref([]);
 
-    const displayCategories = [
-      { name: "Electronics", image: "/categories/electronics.jpg" },
-      { name: "Make-up", image: "/categories/makeup.jpg" },
-      { name: "Clothes", image: "/categories/clothes.jpg" },
-      { name: "Shoes", image: "/categories/shoes.jpg" },
-      { name: "Accessories", image: "/categories/accessories.jpg" },
-      { name: "Books", image: "/categories/books.jpg" },
-      { name: "Home Appliances", image: "/categories/home-appliances.jpg" }
-    ];
-
     const fetchProducts = async () => {
       try {
-        const data = await getProducts();
+        const data = await productsStore.fetchProducts();
 
         products.value = data.map(p => ({
           ...p,
@@ -127,27 +119,20 @@ export default {
 
         categories.value = [...new Set(products.value.map(p => p.category))];
 
-      } catch {
-        error.value = "Failed to fetch products";
-      } finally {
-        loading.value = false;
+      } catch (err) {
+        console.error("Failed to fetch products:", err);
       }
     };
+
     const changeQty = (product, delta) => {
       if (product.added) return;
-      product.userQuantity = Math.max(1, Math.min(product.quantity, product.userQuantity + delta));
+      product.userQuantity = Math.max(1, Math.min(product.stock, product.userQuantity + delta));
     };
 
     const addToCart = async (product) => {
       try {
-        await addCartItem(product.id, product.userQuantity || 1);
-
+        await cartStore.addItem(product.id, product.userQuantity || 1);
         product.added = true;
-
-        // refresh count properly
-        const cartItems = await fetchCart();
-        cartTotal.value = cartItems.length;
-
       } catch (err) {
         console.error("Failed to add to cart:", err);
       }
@@ -155,13 +140,8 @@ export default {
 
     const addToWishlist = async (product) => {
       try {
-        await addWishItem(product.id);
-
+        await wishlistStore.addItem(product.id);
         product.saved = true;
-
-        const wishlistItems = await fetchWishlist();
-        wishlistTotal.value = wishlistItems.length;
-
       } catch (err) {
         console.error("Failed to add to wishlist:", err);
       }
@@ -185,6 +165,9 @@ export default {
 
     onMounted(() => {
       fetchProducts();
+      // Fetch cart and wishlist to warm the cache/state
+      cartStore.fetchCart();
+      wishlistStore.fetchWishlist();
     });
 
     return {
@@ -195,13 +178,12 @@ export default {
       changeQty,
       selectedCategory,
       categories,
-      loading,
-      error,
+      loading: computed(() => productsStore.loading),
+      error: computed(() => productsStore.error),
       filteredProducts
     };
   }
-};
-</script>
+};</script>
 
 <style scoped>
 /* ── Palette ── */

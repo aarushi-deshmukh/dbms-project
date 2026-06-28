@@ -129,8 +129,8 @@
                   <span class="alert-name">{{ item.name }}</span>
                   <span class="alert-brand">{{ item.brand }} · {{ item.category }}</span>
                 </div>
-                <div class="stock-pill" :class="item.quantity === 0 ? 'pill--red' : 'pill--orange'">
-                  {{ item.quantity === 0 ? 'Out of stock' : item.quantity + ' left' }}
+                <div class="stock-pill" :class="item.stock === 0 ? 'pill--red' : 'pill--orange'">
+                  {{ item.stock === 0 ? 'Out of stock' : item.stock + ' left' }}
                 </div>
               </div>
             </div>
@@ -167,7 +167,7 @@
                   </td>
                   <td><span class="cat-tag">{{ p.category }}</span></td>
                   <td>₹{{ formatNumber(p.price) }}</td>
-                  <td>{{ p.quantity }}</td>
+                  <td>{{ p.stock }}</td>
                   <td class="value-cell">₹{{ formatNumber(p.value) }}</td>
                   <td>
                     <div class="share-bar-wrap">
@@ -233,96 +233,34 @@
 </template>
 
 <script>
-import axios from 'axios';
-import { ref, onMounted } from 'vue';
-
-const LOW_STOCK_THRESHOLD = 10;
+import { ref, onMounted, computed } from 'vue';
+import { useProductsStore } from '@/stores/products';
 
 export default {
   setup() {
-    const loading = ref(true);
+    const productsStore = useProductsStore();
     const lastUpdated = ref('');
-    const stats = ref({});
 
     const formatNumber = (n) => {
       if (n === undefined || n === null) return '0';
       return Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
     };
 
-    const computeStats = (products) => {
-      const total = products.length;
-      const totalUnits = products.reduce((s, p) => s + Number(p.quantity), 0);
-      const totalValue = products.reduce((s, p) => s + Number(p.price) * Number(p.quantity), 0);
-      const avgPrice = total ? products.reduce((s, p) => s + Number(p.price), 0) / total : 0;
-
-      // Category breakdown
-      const catMap = {};
-      products.forEach(p => {
-        const c = p.category || 'Uncategorized';
-        catMap[c] = (catMap[c] || 0) + 1;
-      });
-      const byCategory = Object.entries(catMap)
-        .map(([name, count]) => ({ name, count, pct: total ? Math.round(count / total * 100) : 0 }))
-        .sort((a, b) => b.count - a.count);
-
-      // Low stock
-      const lowStockItems = products
-        .filter(p => Number(p.quantity) <= LOW_STOCK_THRESHOLD)
-        .sort((a, b) => Number(a.quantity) - Number(b.quantity));
-
-      // Top by inventory value
-      const topByValue = [...products]
-        .map(p => ({ ...p, value: Number(p.price) * Number(p.quantity) }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 8)
-        .map(p => ({ ...p, share: totalValue ? Math.round(p.value / totalValue * 100) : 0 }));
-
-      // Price buckets
-      const buckets = [
-        { label: '₹0 – 500', min: 0, max: 500 },
-        { label: '₹500 – 2k', min: 500, max: 2000 },
-        { label: '₹2k – 10k', min: 2000, max: 10000 },
-        { label: '₹10k+', min: 10000, max: Infinity },
-      ];
-      const priceBuckets = buckets.map(b => {
-        const count = products.filter(p => Number(p.price) >= b.min && Number(p.price) < b.max).length;
-        return { label: b.label, count, pct: total ? Math.round(count / total * 100) : 0 };
-      });
-
-      // Stock health
-      const healthyStock = products.filter(p => Number(p.quantity) > 10).length;
-      const warningStock = products.filter(p => Number(p.quantity) > 0 && Number(p.quantity) <= 10).length;
-      const outOfStock = products.filter(p => Number(p.quantity) === 0).length;
-
-      return {
-        totalProducts: total,
-        totalUnits,
-        totalValue,
-        avgPrice,
-        lowStockCount: lowStockItems.length,
-        lowStockItems,
-        byCategory,
-        topByValue,
-        priceBuckets,
-        healthyStock,
-        warningStock,
-        outOfStock,
-      };
-    };
-
     onMounted(async () => {
       try {
-        const res = await axios.get('http://127.0.0.1:8000/api/products/');
-        stats.value = computeStats(res.data);
+        await productsStore.fetchSellerStats();
         lastUpdated.value = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
       } catch (e) {
         console.error(e);
-      } finally {
-        loading.value = false;
       }
     });
 
-    return { loading, lastUpdated, stats, formatNumber };
+    return {
+      loading: computed(() => productsStore.loading),
+      lastUpdated,
+      stats: computed(() => productsStore.stats),
+      formatNumber
+    };
   }
 };
 </script>
