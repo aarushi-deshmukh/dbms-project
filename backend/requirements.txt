@@ -10,4 +10,4 @@ tzdata==2025.3
 psycopg[binary]>=3.1.18
 dj-database-url>=2.1.0
 python-dotenv>=1.0.1
-gunicorn==21.2.0
+gunicorn==22.0.0
