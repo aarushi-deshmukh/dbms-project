@@ -7,3 +7,6 @@ pillow==12.2.0
 PyJWT==2.12.1
 sqlparse==0.5.5
 tzdata==2025.3
+psycopg[binary]>=3.1.18
+dj-database-url>=2.1.0
+python-dotenv>=1.0.1

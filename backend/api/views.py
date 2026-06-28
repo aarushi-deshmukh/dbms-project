@@ -1,16 +1,21 @@
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from .models import Buyer, Seller, Product, Cart, CartItem, Wishlist
-from .serializers import ProductSerializer
+from .serializers import (
+    ProductSerializer,
+    SignInSerializer,
+    BuyerSignupSerializer,
+    SellerSignupSerializer,
+)
 from django.contrib.auth.models import User
-from django.contrib.auth import authenticate, login
-from django.http import JsonResponse
-import json
 from rest_framework import status
 from django.contrib.auth.hashers import check_password
-from django.views.decorators.csrf import csrf_exempt
 from rest_framework_simplejwt.tokens import RefreshToken
+import logging
+
+logger = logging.getLogger('api')
 
 @api_view(['GET'])
 def products(request):
@@ -18,192 +23,201 @@ def products(request):
     serializer = ProductSerializer(items, many=True)
     return Response(serializer.data)
 
-@csrf_exempt
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def signin(request):
+    request.throttle_scope = 'signin'
+    serializer = SignInSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
 
-    if request.method != "POST":
-        return JsonResponse({"success": False, "error": "Invalid request method"}, status=405)
-
-    data = json.loads(request.body)
-
-    email = data.get("email")
-    password = data.get("password")
-    account_type = data.get("account_type")
+    email = serializer.validated_data['email']
+    password = serializer.validated_data['password']
+    account_type = serializer.validated_data['account_type']
 
     try:
         user = User.objects.get(email=email)
     except User.DoesNotExist:
-        return JsonResponse({"success": False, "error": "User not found"})
+        logger.warning('Signin failed: email not found %s', email)
+        return Response({'success': False, 'message': 'User not found', 'data': None, 'error': 'User not found', 'code': 'user_not_found'}, status=status.HTTP_404_NOT_FOUND)
 
-    # check password
     if not check_password(password, user.password):
-        return JsonResponse({"success": False, "error": "Invalid password"})
+        logger.warning('Signin failed: invalid password for %s', email)
+        return Response({'success': False, 'message': 'Invalid password', 'data': None, 'error': 'Invalid password', 'code': 'invalid_credentials'}, status=status.HTTP_401_UNAUTHORIZED)
 
-    # check role
-    if account_type == "Buyer":
+    if account_type == 'Buyer':
         if not Buyer.objects.filter(user=user).exists():
-            return JsonResponse({"success": False, "error": "Buyer account not found"})
-
-    elif account_type == "Seller":
+            return Response({'success': False, 'message': 'Buyer account not found', 'data': None, 'error': 'Buyer account not found', 'code': 'account_not_found'}, status=status.HTTP_404_NOT_FOUND)
+    elif account_type == 'Seller':
         if not Seller.objects.filter(user=user).exists():
-            return JsonResponse({"success": False, "error": "Seller account not found"})
-    else:
-        return JsonResponse({"success": False, "error": "Invalid account type"})
+            return Response({'success': False, 'message': 'Seller account not found', 'data': None, 'error': 'Seller account not found', 'code': 'account_not_found'}, status=status.HTTP_404_NOT_FOUND)
 
-    # GENERATE JWT TOKENS
     refresh = RefreshToken.for_user(user)
 
-    return JsonResponse({
-        "success": True,
-        "user_id": user.id,
-        "email": user.email,
-        "account_type": account_type,
-        "access": str(refresh.access_token),
-        "refresh": str(refresh)
+    return Response({
+        'success': True,
+        'message': 'Signed in successfully',
+        'data': {
+            'user_id': user.id,
+            'email': user.email,
+            'account_type': account_type,
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+        },
+        'error': None,
+        'code': 'signed_in',
     })
-    
-@csrf_exempt
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def signup_buyer(request):
+    request.throttle_scope = 'signup'
+    serializer = BuyerSignupSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
 
-    if request.method != "POST":
-        return JsonResponse({"error": "Invalid request"}, status=405)
-
-    data = json.loads(request.body)
-
-    if User.objects.filter(email=data["email"]).exists():
-        return JsonResponse({"error": "User already exists"})
+    validated = serializer.validated_data
 
     user = User.objects.create_user(
-        username=data["username"],
-        email=data["email"],
-        password=data["password"],
-        first_name=data["first_name"],
-        last_name=data["last_name"]
+        username=validated['username'],
+        email=validated['email'],
+        password=validated['password'],
+        first_name=validated['first_name'],
+        last_name=validated['last_name'],
     )
 
     Buyer.objects.create(
         user=user,
-        age=data["age"],
-        phone_number=data["phone_number"],
-        address=data["address"],
-        city=data["city"],
-        country=data["country"],
-        pincode=data["pincode"]
+        age=validated['age'],
+        phone_number=validated['phone_number'],
+        address=validated['address'],
+        city=validated['city'],
+        country=validated['country'],
+        pincode=validated['pincode'],
     )
 
-    return JsonResponse({"message": "Buyer account created successfully"})
+    return Response({
+        'success': True,
+        'message': 'Buyer account created successfully',
+        'data': {'user_id': user.id, 'email': user.email},
+        'error': None,
+        'code': 'buyer_created',
+    }, status=status.HTTP_201_CREATED)
 
-@csrf_exempt    
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def signup_seller(request):
+    request.throttle_scope = 'signup'
+    serializer = SellerSignupSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
 
-    if request.method == "POST":
+    validated = serializer.validated_data
 
-        data = json.loads(request.body)
+    user = User.objects.create_user(
+        username=validated['email'],
+        email=validated['email'],
+        password=validated['password'],
+    )
 
-        user = User.objects.create_user(
-            username=data["email"],
-            email=data["email"],
-            password=data["password"]
-        )
+    Seller.objects.create(
+        user=user,
+        company_name=validated['company_name'],
+        contact_number=validated['contact_number'],
+        address=validated['address'],
+        city=validated['city'],
+        country=validated['country'],
+        pincode=validated['pincode'],
+    )
 
-        Seller.objects.create(
-            user=user,
-            company_name=data["company_name"],
-            contact_number=data["contact_number"],
-            address=data["address"],
-            city=data["city"],
-            country=data["country"],
-            pincode=data["pincode"]
-        )
-
-        return JsonResponse({
-            "message": "Seller account created successfully"
-        })
+    return Response({
+        'success': True,
+        'message': 'Seller account created successfully',
+        'data': {'user_id': user.id, 'email': user.email},
+        'error': None,
+        'code': 'seller_created',
+    }, status=status.HTTP_201_CREATED)
     
-@csrf_exempt
+@api_view(['GET'])
+@permission_classes([AllowAny])
 def get_products(request):
-
     products = Product.objects.all()
-
-    data = []
-
-    for p in products:
-        data.append({
-            "id": p.id,
-            "name": p.name,
-            "price": float(p.price),
-            "quantity": p.stock,
-            "category": p.category,
-            "image": p.image.url if p.image else ""
-        })
-
-    return JsonResponse(data, safe=False)
+    serializer = ProductSerializer(products, many=True)
+    return Response({
+        'success': True,
+        'message': 'Product list retrieved successfully',
+        'data': serializer.data,
+        'error': None,
+        'code': 'products_listed',
+    })
 
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def add_to_cart(request):
-    print("AUTH HEADER:", request.headers.get("Authorization"))
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Login required"}, status=401)
+    data = request.data
+    product_id = data.get("product_id")
+    quantity = data.get("quantity", 1)
 
-    if request.method == "POST":
+    buyer = Buyer.objects.get(user=request.user)
+    product = Product.objects.get(id=product_id)
 
-        data = json.loads(request.body)
+    cart, created = Cart.objects.get_or_create(buyer=buyer)
+    cart_item, created = CartItem.objects.get_or_create(
+        cart=cart,
+        product=product
+    )
 
-        product_id = data.get("product_id")
-        quantity = data.get("quantity", 1)
+    if not created:
+        cart_item.quantity += quantity
+    else:
+        cart_item.quantity = quantity
 
-        buyer = Buyer.objects.get(user=request.user)
+    cart_item.save()
 
-        product = Product.objects.get(id=product_id)
-
-        # get or create cart
-        cart, created = Cart.objects.get_or_create(buyer=buyer)
-
-        # get or create cart item
-        cart_item, created = CartItem.objects.get_or_create(
-            cart=cart,
-            product=product
-        )
-
-        if not created:
-            cart_item.quantity += quantity
-        else:
-            cart_item.quantity = quantity
-
-        cart_item.save()
-
-        return JsonResponse({"message": "Added to cart"})    
+    return Response({
+        'success': True,
+        'message': 'Added to cart',
+        'data': None,
+        'error': None,
+        'code': 'cart_item_added',
+    })
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_cart(request):
-
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Login required"}, status=401)
-
     buyer = Buyer.objects.get(user=request.user)
-
     cart = Cart.objects.filter(buyer=buyer).first()
 
     if not cart:
-        return JsonResponse({"items": []})
-
-    items = CartItem.objects.filter(cart=cart)
-
-    data = []
-
-    for item in items:
-        data.append({
-            "product_id": item.product.id,
-            "name": item.product.name,
-            "price": float(item.product.price),
-            "quantity": item.quantity,
-            "image": item.product.image.url if item.product.image else None
+        return Response({
+            'success': True,
+            'message': 'Cart retrieved successfully',
+            'data': {'items': []},
+            'error': None,
+            'code': 'cart_empty',
         })
 
-    return JsonResponse({"items": data})
+    items = CartItem.objects.filter(cart=cart)
+    data = [
+        {
+            'product_id': item.product.id,
+            'name': item.product.name,
+            'price': float(item.product.price),
+            'quantity': item.quantity,
+            'image': item.product.image.url if item.product.image else None,
+        }
+        for item in items
+    ]
+
+    return Response({
+        'success': True,
+        'message': 'Cart retrieved successfully',
+        'data': {'items': data},
+        'error': None,
+        'code': 'cart_retrieved',
+    })
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -226,25 +240,26 @@ def add_to_wishlist(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_wishlist(request):
-
-    if not request.user.is_authenticated:
-        return JsonResponse({"error": "Login required"}, status=401)
-
     buyer = Buyer.objects.get(user=request.user)
-
     items = Wishlist.objects.filter(buyer=buyer)
 
-    data = []
+    data = [
+        {
+            'product_id': item.product.id,
+            'name': item.product.name,
+            'price': float(item.product.price),
+            'image': item.product.image.url if item.product.image else None,
+        }
+        for item in items
+    ]
 
-    for item in items:
-        data.append({
-            "product_id": item.product.id,
-            "name": item.product.name,
-            "price": float(item.product.price),
-            "image": item.product.image.url if item.product.image else None
-        })
-
-    return JsonResponse({"items": data})
+    return Response({
+        'success': True,
+        'message': 'Wishlist retrieved successfully',
+        'data': {'items': data},
+        'error': None,
+        'code': 'wishlist_retrieved',
+    })
 
 @api_view(["DELETE"])
 @permission_classes([IsAuthenticated])
