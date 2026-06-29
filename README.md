@@ -141,7 +141,9 @@ Sellers can:
 
 ## Database
 
-* **SQLite (development)**
+* **Neon PostgreSQL**
+* Configured through `DATABASE_URL`
+* Requires SSL for managed Neon connections
 
 Database entities include:
 
@@ -152,6 +154,10 @@ Database entities include:
 * Cart
 * CartItem
 * Wishlist
+
+For local development, create `backend/.env` from `backend/.env.example` and set
+`DATABASE_URL` to the Neon connection string. Do not commit `.env` or database
+credentials.
 
 ---
 
@@ -234,6 +240,24 @@ pip install -r requirements.txt
 
 python manage.py migrate
 python manage.py runserver
+```
+
+Required backend environment variables:
+
+```env
+DATABASE_URL=postgresql://username:password@host.neon.tech/dbname?sslmode=require
+SECRET_KEY=change-me
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+CORS_ALLOWED_ORIGINS=http://localhost:5173
+CSRF_TRUSTED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
+```
+
+Before deploying, verify the PostgreSQL schema against Neon:
+
+```bash
+python manage.py migrate --noinput
+python manage.py verify_postgres_schema
 ```
 
 Backend runs at:

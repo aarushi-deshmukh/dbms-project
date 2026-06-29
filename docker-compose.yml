@@ -1,50 +1,25 @@
-# Local development docker-compose for testing production build
-# Usage: docker-compose up
-
-version: '3.8'
+# Local development docker-compose for testing the production build.
+# Usage: docker compose --env-file backend/.env up --build
 
 services:
-  # PostgreSQL database for local testing
-  postgres:
-    image: postgres:15-alpine
-    environment:
-      POSTGRES_DB: ecommerce
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   # Django backend
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      DEBUG: "False"
-      DJANGO_ENV: "production"
-      SECRET_KEY: "docker-dev-secret-key-change-in-production"
-      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/ecommerce"
-      ALLOWED_HOSTS: "localhost,127.0.0.1,backend"
-      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://localhost:3000"
-      CSRF_TRUSTED_ORIGINS: "http://localhost:5173,http://localhost:3000"
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL to the Neon PostgreSQL connection string}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
+      DEBUG: ${DEBUG:-False}
+      DJANGO_ENV: ${DJANGO_ENV:-development}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://localhost:3000}
     ports:
       - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
     volumes:
       - ./backend:/app
     command: >
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
              gunicorn --bind 0.0.0.0:8000 --workers 2 backend.wsgi:application"
-
-volumes:
-  postgres_data:

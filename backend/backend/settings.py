@@ -114,6 +114,7 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
 SECURE_SSL_REDIRECT = not DEBUG
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 CORS_ALLOW_CREDENTIALS = True
 
@@ -140,24 +141,30 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+DATABASE_URL = get_env_variable('DATABASE_URL', required=True)
+
 DATABASES = {
-    'default': dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+    'default': dj_database_url.parse(
+        DATABASE_URL,
         conn_max_age=600,
+        conn_health_checks=True,
     )
 }
 
-# Use transactions in production
-if not DEBUG:
-    DATABASES['default']['ATOMIC_REQUESTS'] = True
+if DATABASES['default']['ENGINE'] != 'django.db.backends.postgresql':
+    raise ImproperlyConfigured('DATABASE_URL must point to a PostgreSQL database.')
+
+DATABASES['default']['ATOMIC_REQUESTS'] = True
+DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 
 # PostgreSQL-specific configuration for Neon
 if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
-    # Neon requires SSL mode
+    # Neon requires SSL. Keep explicit sslmode=require unless the Neon URL
+    # already provides a stricter/compatible value.
     if 'OPTIONS' not in DATABASES['default']:
         DATABASES['default']['OPTIONS'] = {}
-    
-    DATABASES['default']['OPTIONS']['sslmode'] = 'require' if not DEBUG else 'prefer'
+
+    DATABASES['default']['OPTIONS'].setdefault('sslmode', 'require')
     DATABASES['default']['OPTIONS']['connect_timeout'] = 10
 
 

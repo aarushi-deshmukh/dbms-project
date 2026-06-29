@@ -325,22 +325,30 @@ def place_order_from_cart(user, shipping_address_id=None, notes=None):
 
         # Use select_for_update to lock product rows for the duration of this
         # transaction, preventing concurrent checkouts from overselling.
-        cart_items = (
+        cart_items = list(
             CartItem.objects
             .select_for_update()
-            .select_related('product')
             .filter(cart=cart)
         )
 
-        if not cart_items.exists():
+        if not cart_items:
             raise ValidationError('Your cart is empty.')
+
+        cart_item_ids = [item.id for item in cart_items]
+        product_ids = [item.product_id for item in cart_items if item.product_id]
+        products_by_id = Product.objects.select_for_update().in_bulk(product_ids)
 
         # ── 1. Validate stock for all items before touching anything ────────
         for item in cart_items:
-            if item.product.stock < item.quantity:
+            product = products_by_id.get(item.product_id)
+            if product is None:
+                raise ValidationError('A cart item references a product that no longer exists.')
+            item.product = product
+
+            if product.stock < item.quantity:
                 raise ValidationError(
-                    f'Insufficient stock for "{item.product.name}". '
-                    f'Available: {item.product.stock}, requested: {item.quantity}.'
+                    f'Insufficient stock for "{product.name}". '
+                    f'Available: {product.stock}, requested: {item.quantity}.'
                 )
 
         # ── 2. Resolve shipping address ─────────────────────────────────────
@@ -385,7 +393,7 @@ def place_order_from_cart(user, shipping_address_id=None, notes=None):
             )
 
         # ── 7. Clear the cart ────────────────────────────────────────────────
-        cart_items.delete()
+        CartItem.objects.filter(id__in=cart_item_ids).delete()
 
     logger.info('Order %s created for buyer %s (total: %s)', order.order_number, user.username, total_amount)
     return order
