@@ -79,5 +79,43 @@ export const useProfileStore = defineStore("profile", {
         this.loading = false;
       }
     },
+    async updateProfile(profileData) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const res = await api.put("profile/", profileData);
+        // Refresh profile state from the server response
+        if (res.data?.data) {
+          this.profile = res.data.data;
+        } else {
+          await this.fetchProfile();
+        }
+        return res.data;
+      } catch (err) {
+        this.error = err.response?.data?.message || err.message;
+        throw err;
+      } finally {
+        this.loading = false;
+      }
+    },
+    async deleteAccount() {
+      this.loading = true;
+      this.error = null;
+      try {
+        const res = await api.delete("profile/");
+        // Clear all auth state from localStorage
+        localStorage.removeItem("access");
+        localStorage.removeItem("refresh");
+        localStorage.removeItem("user_type");
+        this.profile = null;
+        this.shippingAddresses = [];
+        return res.data;
+      } catch (err) {
+        this.error = err.response?.data?.message || err.message;
+        throw err;
+      } finally {
+        this.loading = false;
+      }
+    },
   },
 });

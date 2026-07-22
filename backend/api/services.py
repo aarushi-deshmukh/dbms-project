@@ -115,6 +115,31 @@ def resolve_and_delete_product_by_name_brand(user, name, brand):
     return delete_seller_product(user, product.id)
 
 
+def update_seller_product(user, product_id, validated_data):
+    """
+    Partial update for a seller's own product.
+    Validates ownership — raises PermissionDenied if the product belongs to another seller.
+    Only fields present in validated_data are updated (partial update semantics).
+    """
+    seller = get_object_or_404(Seller, user=user)
+    product = get_object_or_404(Product, id=product_id)
+
+    if product.seller_id != seller.id:
+        raise PermissionDenied('You do not own this product.')
+
+    for field, value in validated_data.items():
+        setattr(product, field, value)
+    product.save()
+    logger.info('Seller %s updated product "%s" (id=%s)', seller.company_name, product.name, product_id)
+    return product
+
+
+def create_product_for_seller(user, validated_data):
+    seller = get_object_or_404(Seller, user=user)
+    product = Product.objects.create(seller=seller, **validated_data)
+    return product
+
+
 # ── Cart ──────────────────────────────────────────────────────────────────────
 
 def get_cart_items(user):
@@ -220,10 +245,58 @@ def get_profile_for_user(user):
     return None
 
 
-def create_product_for_seller(user, validated_data):
+# ── Profile Update & Deletion ─────────────────────────────────────────────────
+
+def update_buyer_profile(user, validated_data):
+    """
+    Partially updates a buyer's profile.
+    User-level fields (first_name, last_name) update the auth User;
+    the rest update the Buyer model.
+    """
+    buyer = get_object_or_404(Buyer, user=user)
+
+    # Separate User-model fields from Buyer-model fields
+    user_field_names = ('first_name', 'last_name')
+    user_updates = {k: validated_data.pop(k) for k in list(validated_data.keys()) if k in user_field_names}
+
+    if user_updates:
+        for field, value in user_updates.items():
+            setattr(user, field, value)
+        user.save(update_fields=list(user_updates.keys()))
+
+    # Update Buyer model fields
+    for field, value in validated_data.items():
+        setattr(buyer, field, value)
+    if validated_data:
+        buyer.save()
+
+    logger.info('Buyer %s updated their profile', user.username)
+    return buyer
+
+
+def update_seller_profile(user, validated_data):
+    """
+    Partially updates a seller's profile.
+    All fields are on the Seller model directly.
+    """
     seller = get_object_or_404(Seller, user=user)
-    product = Product.objects.create(seller=seller, **validated_data)
-    return product
+    for field, value in validated_data.items():
+        setattr(seller, field, value)
+    seller.save()
+    logger.info('Seller %s updated their profile', seller.company_name)
+    return seller
+
+
+def delete_user_account(user):
+    """
+    Permanently deletes the authenticated user and all related data.
+    The OneToOneField on Buyer/Seller with CASCADE handles profile deletion.
+    The ForeignKey on Cart, Order, Wishlist, etc. cascades as well.
+    """
+    username = user.username
+    user.delete()
+    logger.info('User "%s" account deleted', username)
+    return True
 
 
 # ── Shipping Addresses ────────────────────────────────────────────────────────
@@ -557,4 +630,3 @@ def get_seller_stats(user):
         'warningStock': warning_stock,
         'outOfStock': out_of_stock,
     }
-

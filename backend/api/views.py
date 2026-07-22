@@ -7,6 +7,9 @@ from .models import Buyer, Seller, Product, Cart, CartItem, Wishlist
 from .serializers import (
     ProductSerializer,
     ProductCreateSerializer,
+    ProductUpdateSerializer,
+    BuyerProfileUpdateSerializer,
+    SellerProfileUpdateSerializer,
     SignInSerializer,
     BuyerSignupSerializer,
     SellerSignupSerializer,
@@ -298,45 +301,108 @@ def remove_from_wishlist(request, product_id):
             {"error": "Item not found in wishlist"},
             status=status.HTTP_404_NOT_FOUND
         )
-    
-@api_view(["GET"])
+
+
+# ── Profile (GET / PUT / DELETE) ──────────────────────────────────────────────
+
+@api_view(["GET", "PUT", "DELETE"])
 @permission_classes([IsAuthenticated])
 def profile(request):
-
+    """
+    GET    /api/profile/  — Returns the authenticated user's profile data.
+    PUT    /api/profile/  — Partially updates buyer or seller profile fields.
+    DELETE /api/profile/  — Permanently deletes the user account and all data.
+    """
     user = request.user
 
-    # check if buyer
-    if Buyer.objects.filter(user=user).exists():
-        buyer = Buyer.objects.get(user=user)
+    # ── GET ──────────────────────────────────────────────────────────────────
+    if request.method == "GET":
+        if Buyer.objects.filter(user=user).exists():
+            buyer = Buyer.objects.get(user=user)
+            return Response({
+                "account_type": "buyer",
+                "name": user.first_name + " " + user.last_name,
+                "email": user.email,
+                "phone": buyer.phone_number,
+                "address": buyer.address,
+                "city": buyer.city,
+                "country": buyer.country,
+                "pincode": buyer.pincode,
+                "age": buyer.age
+            })
 
-        return Response({
-            "account_type": "buyer",
-            "name": user.first_name + " " + user.last_name,
-            "email": user.email,
-            "phone": buyer.phone_number,
-            "address": buyer.address,
-            "city": buyer.city,
-            "country": buyer.country,
-            "pincode": buyer.pincode,
-            "age": buyer.age
-        })
+        elif Seller.objects.filter(user=user).exists():
+            seller = Seller.objects.get(user=user)
+            return Response({
+                "account_type": "seller",
+                "company_name": seller.company_name,
+                "email": user.email,
+                "phone": seller.contact_number,
+                "address": seller.address,
+                "city": seller.city,
+                "country": seller.country,
+                "pincode": seller.pincode
+            })
 
-    # check if seller
-    elif Seller.objects.filter(user=user).exists():
-        seller = Seller.objects.get(user=user)
+        return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        return Response({
-            "account_type": "seller",
-            "company_name": seller.company_name,
-            "email": user.email,
-            "phone": seller.contact_number,
-            "address": seller.address,
-            "city": seller.city,
-            "country": seller.country,
-            "pincode": seller.pincode
-        })
+    # ── PUT ──────────────────────────────────────────────────────────────────
+    if request.method == "PUT":
+        if Buyer.objects.filter(user=user).exists():
+            serializer = BuyerProfileUpdateSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            buyer = services.update_buyer_profile(user, dict(serializer.validated_data))
+            # Refresh user from DB so updated first/last name are reflected
+            user.refresh_from_db()
+            return Response({
+                "success": True,
+                "message": "Profile updated successfully.",
+                "data": {
+                    "account_type": "buyer",
+                    "name": user.first_name + " " + user.last_name,
+                    "email": user.email,
+                    "phone": buyer.phone_number,
+                    "address": buyer.address,
+                    "city": buyer.city,
+                    "country": buyer.country,
+                    "pincode": buyer.pincode,
+                    "age": buyer.age,
+                },
+                "error": None,
+                "code": "profile_updated",
+            })
 
-    return Response({"error": "Profile not found"}, status=404)
+        elif Seller.objects.filter(user=user).exists():
+            serializer = SellerProfileUpdateSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            seller = services.update_seller_profile(user, dict(serializer.validated_data))
+            return Response({
+                "success": True,
+                "message": "Profile updated successfully.",
+                "data": {
+                    "account_type": "seller",
+                    "company_name": seller.company_name,
+                    "email": user.email,
+                    "phone": seller.contact_number,
+                    "address": seller.address,
+                    "city": seller.city,
+                    "country": seller.country,
+                    "pincode": seller.pincode,
+                },
+                "error": None,
+                "code": "profile_updated",
+            })
+
+        return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # ── DELETE ───────────────────────────────────────────────────────────────
+    if request.method == "DELETE":
+        services.delete_user_account(user)
+        return Response(
+            {"success": True, "message": "Account deleted successfully.", "error": None, "code": "account_deleted"},
+            status=status.HTTP_200_OK,
+        )
+
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated, IsSeller])
@@ -485,18 +551,45 @@ def cancel_order_view(request, order_id):
     })
 
 
-# ── Phase 3: Product Deletion ─────────────────────────────────────────────────
+# ── Phase 3: Product CRUD (GET / PATCH / DELETE by ID) ───────────────────────
 
-@api_view(['DELETE'])
+@api_view(['DELETE', 'PATCH'])
 @permission_classes([IsAuthenticated, IsSeller])
 def delete_product(request, product_id):
     """
-    DELETE /api/products/<product_id>/
-    Standard ID-based product deletion. The seller must own the product.
-    Phase 5 migration target — this is the permanent endpoint.
+    DELETE /api/products/<product_id>/  — Delete a seller's own product.
+    PATCH  /api/products/<product_id>/  — Partially update a seller's own product.
+
+    Seller ownership is validated for both methods.
     """
+    if request.method == 'DELETE':
+        try:
+            services.delete_seller_product(request.user, product_id)
+        except PermissionDenied as exc:
+            return Response(
+                {'success': False, 'message': str(exc.detail), 'error': str(exc.detail), 'code': 'permission_denied'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return Response({
+            'success': True,
+            'message': 'Product deleted successfully.',
+            'error': None,
+            'code': 'product_deleted',
+        })
+
+    # PATCH
+    serializer = ProductUpdateSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+
+    if not serializer.validated_data:
+        return Response(
+            {'success': False, 'message': 'No fields provided for update.', 'error': 'empty_payload', 'code': 'validation_error'},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     try:
-        services.delete_seller_product(request.user, product_id)
+        product = services.update_seller_product(request.user, product_id, dict(serializer.validated_data))
     except PermissionDenied as exc:
         return Response(
             {'success': False, 'message': str(exc.detail), 'error': str(exc.detail), 'code': 'permission_denied'},
@@ -505,9 +598,10 @@ def delete_product(request, product_id):
 
     return Response({
         'success': True,
-        'message': 'Product deleted successfully.',
+        'message': 'Product updated successfully.',
+        'data': ProductSerializer(product).data,
         'error': None,
-        'code': 'product_deleted',
+        'code': 'product_updated',
     })
 
 

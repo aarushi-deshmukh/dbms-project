@@ -69,6 +69,29 @@ export const useProductsStore = defineStore("products", {
         this.loading = false;
       }
     },
+    async updateProduct(productId, formData) {
+      this.loading = true;
+      this.error = null;
+      try {
+        const res = await api.patch(`products/${productId}/`, formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+        // Replace the updated product in the local list
+        const updated = res.data?.data || res.data;
+        const idx = this.sellerProducts.findIndex((p) => p.id === productId);
+        if (idx !== -1 && updated) {
+          this.sellerProducts[idx] = { ...this.sellerProducts[idx], ...updated };
+        }
+        return res.data;
+      } catch (err) {
+        this.error = err.response?.data?.message || err.message;
+        throw err;
+      } finally {
+        this.loading = false;
+      }
+    },
     async deleteProduct(productId) {
       this.loading = true;
       this.error = null;

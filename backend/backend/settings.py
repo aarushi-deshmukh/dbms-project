@@ -54,7 +54,7 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
-# Production Railway deployment hosts
+# Production deployment hosts
 if not DEBUG:
     ALLOWED_HOSTS += [
         host.strip()
@@ -74,6 +74,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'cloudinary_storage',
+    'cloudinary',
     'api',
 ]
 
@@ -205,6 +207,33 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# ── Cloudinary image storage ────────────────────────────────────────────────
+# Required env vars: CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': get_env_variable('CLOUDINARY_CLOUD_NAME', ''),
+    'API_KEY': get_env_variable('CLOUDINARY_API_KEY', ''),
+    'API_SECRET': get_env_variable('CLOUDINARY_API_SECRET', ''),
+}
+
+if DEBUG:
+    MEDIA_URL = "/media/"
+    MEDIA_ROOT = BASE_DIR / "media"
+else:
+    CLOUDINARY_STORAGE = {
+        "CLOUD_NAME": get_env_variable("CLOUDINARY_CLOUD_NAME", required=True),
+        "API_KEY": get_env_variable("CLOUDINARY_API_KEY", required=True),
+        "API_SECRET": get_env_variable("CLOUDINARY_API_SECRET", required=True),
+    }
+
+    STORAGES = {
+        "default": {
+            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
+        },
+    }
 
 LOGGING = {
     'version': 1,

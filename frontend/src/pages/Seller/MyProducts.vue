@@ -34,17 +34,25 @@
           <!-- Image -->
           <div class="card-image">
             <img
-              :src="product.image || ''"
+              v-if="product.image"
+              :src="product.image"
               :alt="product.name"
               @error="e => e.target.style.display='none'"
             />
+            <div v-else class="img-placeholder">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            </div>
           </div>
 
           <!-- Info -->
           <div class="card-body">
             <span class="card-category">{{ product.category }}</span>
             <h3 class="card-name">{{ product.name }}</h3>
-            <p class="card-brand">{{ product.brand }}</p>
+            <p class="card-brand">{{ product.brand || product.seller_company_name || '' }}</p>
 
             <div class="card-details">
               <div class="detail-row">
@@ -60,7 +68,7 @@
             </div>
 
             <div class="card-actions">
-              <button class="btn-edit" @click="editProduct(product)">Edit</button>
+              <button class="btn-edit" @click="openEditModal(product)">Edit</button>
               <button class="btn-delete" @click="confirmRemoveProduct(product)">Delete</button>
             </div>
           </div>
@@ -68,15 +76,91 @@
       </div>
     </div>
 
-    <!-- Delete Modal -->
+    <!-- Delete Confirmation Modal -->
     <div v-if="showDeleteModal" class="modal-overlay" @click="showDeleteModal = false">
       <div class="modal-content" @click.stop>
         <h3>Delete Product</h3>
         <p>Are you sure you want to delete <strong>{{ productToDelete?.name }}</strong>?</p>
         <div class="modal-actions">
           <button @click="showDeleteModal = false" class="btn-modal-cancel">Cancel</button>
-          <button @click="removeProduct" class="btn-modal-delete">Delete</button>
+          <button @click="removeProduct" class="btn-modal-delete" :disabled="loading">
+            {{ loading ? 'Deleting...' : 'Delete' }}
+          </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Edit Product Modal -->
+    <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
+      <div class="modal-content modal-edit" @click.stop>
+        <div class="modal-header">
+          <h3>Edit Product</h3>
+          <button class="btn-modal-close" @click="closeEditModal">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <form @submit.prevent="saveEditProduct" class="edit-form">
+          <!-- Image upload -->
+          <div class="form-group">
+            <label>Product Image</label>
+            <div class="edit-image-preview" v-if="editImagePreview || editProduct.image">
+              <img :src="editImagePreview || editProduct.image" alt="Preview" />
+              <button type="button" class="btn-remove-img" @click="removeEditImage">Remove</button>
+            </div>
+            <input type="file" ref="editFileInput" @change="handleEditImageSelect" accept="image/*" style="display:none" />
+            <button type="button" class="btn-upload-img" @click="$refs.editFileInput.click()">
+              {{ editImagePreview || editProduct.image ? 'Change Image' : 'Upload Image' }}
+            </button>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Product Name <span class="required">*</span></label>
+              <input type="text" v-model="editProduct.name" required />
+            </div>
+            <div class="form-group">
+              <label>Price (₹) <span class="required">*</span></label>
+              <input type="number" v-model="editProduct.price" step="0.01" min="0" required />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Category</label>
+              <select v-model="editProduct.category">
+                <option value="">Select Category</option>
+                <option value="clothing">Clothing</option>
+                <option value="shoes">Shoes</option>
+                <option value="accessories">Accessories</option>
+                <option value="books">Books</option>
+                <option value="home-appliances">Home Appliances</option>
+                <option value="electronics">Electronics</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Quantity <span class="required">*</span></label>
+              <input type="number" v-model="editProduct.stock" min="0" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Description <span class="required">*</span></label>
+            <textarea v-model="editProduct.description" rows="3" required></textarea>
+          </div>
+
+          <div v-if="editError" class="edit-error">{{ editError }}</div>
+
+          <div class="modal-actions">
+            <button type="button" @click="closeEditModal" class="btn-modal-cancel">Cancel</button>
+            <button type="submit" class="btn-modal-save" :disabled="saving">
+              {{ saving ? 'Saving...' : 'Save Changes' }}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -94,6 +178,13 @@ export default {
     const selectedCategory = ref("all");
     const showDeleteModal = ref(false);
     const productToDelete = ref(null);
+    const showEditModal = ref(false);
+    const editProduct = ref({});
+    const editImageFile = ref(null);
+    const editImagePreview = ref(null);
+    const editFileInput = ref(null);
+    const editError = ref(null);
+    const saving = ref(false);
     const router = useRouter();
 
     const fetchProducts = async () => {
@@ -112,7 +203,12 @@ export default {
     const removeProduct = async () => {
       try {
         const product = productToDelete.value;
-        await productsStore.deleteProductLegacy(product.name, product.brand);
+        // Prefer the ID-based endpoint; fall back to legacy if ID is missing
+        if (product.id) {
+          await productsStore.deleteProduct(product.id);
+        } else {
+          await productsStore.deleteProductLegacy(product.name, product.brand);
+        }
         showDeleteModal.value = false;
         productToDelete.value = null;
       } catch (error) {
@@ -121,8 +217,75 @@ export default {
       }
     };
 
-    const editProduct = (product) => {
-      console.log('Edit product:', product);
+    // ── Edit helpers ───────────────────────────────────────────────────────
+    const openEditModal = (product) => {
+      editProduct.value = {
+        id: product.id,
+        name: product.name,
+        description: product.description,
+        price: product.price,
+        stock: product.stock,
+        category: product.category || '',
+        image: product.image || null,
+      };
+      editImageFile.value = null;
+      editImagePreview.value = null;
+      editError.value = null;
+      showEditModal.value = true;
+    };
+
+    const closeEditModal = () => {
+      showEditModal.value = false;
+      editImageFile.value = null;
+      editImagePreview.value = null;
+      editError.value = null;
+    };
+
+    const handleEditImageSelect = (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) {
+        alert('Image must be under 5MB');
+        return;
+      }
+      editImageFile.value = file;
+      const reader = new FileReader();
+      reader.onload = (ev) => { editImagePreview.value = ev.target.result; };
+      reader.readAsDataURL(file);
+    };
+
+    const removeEditImage = () => {
+      editImageFile.value = null;
+      editImagePreview.value = null;
+      editProduct.value.image = null;
+      if (editFileInput.value) editFileInput.value.value = '';
+    };
+
+    const saveEditProduct = async () => {
+      saving.value = true;
+      editError.value = null;
+      try {
+        const formData = new FormData();
+        formData.append('name', editProduct.value.name);
+        formData.append('description', editProduct.value.description);
+        formData.append('price', editProduct.value.price);
+        formData.append('stock', editProduct.value.stock);
+        if (editProduct.value.category) {
+          formData.append('category', editProduct.value.category);
+        }
+        if (editImageFile.value) {
+          formData.append('image', editImageFile.value);
+        }
+
+        await productsStore.updateProduct(editProduct.value.id, formData);
+        closeEditModal();
+        // Refresh to get latest data (including Cloudinary URL if image changed)
+        await productsStore.fetchSellerProducts();
+      } catch (err) {
+        editError.value = err.response?.data?.message || err.message || 'Failed to update product.';
+      } finally {
+        saving.value = false;
+      }
     };
 
     const formatPrice = (price) => parseFloat(price).toFixed(2);
@@ -132,20 +295,27 @@ export default {
     const products = computed(() => productsStore.sellerProducts);
 
     const filteredProducts = computed(() =>
-      products.value.filter(product =>
-        (selectedCategory.value === "all" || product.category.toLowerCase() === selectedCategory.value.toLowerCase()) &&
-        (product.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-         product.brand.toLowerCase().includes(searchQuery.value.toLowerCase()))
-      )
+      products.value.filter(product => {
+        const brand = product.brand || product.seller_company_name || '';
+        const matchCategory = selectedCategory.value === "all" ||
+          (product.category || '').toLowerCase() === selectedCategory.value.toLowerCase();
+        const matchSearch = product.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+          brand.toLowerCase().includes(searchQuery.value.toLowerCase());
+        return matchCategory && matchSearch;
+      })
     );
 
     const goToAddProducts = () => router.push("/add-product");
 
     return {
-      products, searchQuery, selectedCategory, loading: computed(() => productsStore.loading),
+      products, searchQuery, selectedCategory,
+      loading: computed(() => productsStore.loading),
       showDeleteModal, productToDelete, filteredProducts,
       goToAddProducts, confirmRemoveProduct, removeProduct,
-      editProduct, formatPrice
+      showEditModal, editProduct, editImagePreview, editFileInput,
+      editError, saving,
+      openEditModal, closeEditModal, handleEditImageSelect,
+      removeEditImage, saveEditProduct, formatPrice,
     };
   }
 };
@@ -267,6 +437,8 @@ export default {
   object-fit: cover;
   display: block;
 }
+.img-placeholder { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+.img-placeholder svg { stroke: #d4d4d4; }
 
 /* Body */
 .card-body {
@@ -351,7 +523,7 @@ export default {
 }
 .btn-delete:hover { background: #dc2626; color: #ffffff; }
 
-/* ── Modal ───────────────────────────────────────────────── */
+/* ── Modal shared ─────────────────────────────────────────── */
 .modal-overlay {
   position: fixed; inset: 0;
   background: rgba(0, 0, 0, 0.45);
@@ -373,7 +545,7 @@ export default {
 
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
 
-.btn-modal-cancel, .btn-modal-delete {
+.btn-modal-cancel, .btn-modal-delete, .btn-modal-save {
   padding: 9px 22px; border-radius: 8px;
   font-size: 14px; font-weight: 500; cursor: pointer;
   transition: all 0.15s ease; border: none;
@@ -382,7 +554,102 @@ export default {
 .btn-modal-cancel { background: #ffffff; color: #1a1a1a; border: 1px solid #d4d4d4; }
 .btn-modal-cancel:hover { background: #f5f5f5; }
 .btn-modal-delete { background: #dc2626; color: #ffffff; }
-.btn-modal-delete:hover { background: #b91c1c; }
+.btn-modal-delete:hover:not(:disabled) { background: #b91c1c; }
+.btn-modal-delete:disabled { background: #a3a3a3; cursor: not-allowed; }
+.btn-modal-save { background: #1a1a1a; color: #ffffff; }
+.btn-modal-save:hover:not(:disabled) { background: #000; }
+.btn-modal-save:disabled { background: #a3a3a3; cursor: not-allowed; }
+
+/* ── Edit Modal ──────────────────────────────────────────── */
+.modal-edit {
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.modal-header h3 { margin: 0; }
+
+.btn-modal-close {
+  background: none; border: none; cursor: pointer;
+  padding: 4px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.btn-modal-close:hover { background: #f0f0f0; }
+.btn-modal-close svg { stroke: #737373; }
+
+.edit-form { display: flex; flex-direction: column; gap: 16px; }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.form-group { display: flex; flex-direction: column; gap: 6px; }
+.form-group label { font-size: 12px; font-weight: 600; color: #1a1a1a; }
+.required { color: #dc2626; }
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  padding: 8px 12px;
+  border: 1px solid #d4d4d4;
+  border-radius: 7px;
+  font-size: 13px;
+  font-family: inherit;
+  width: 100%;
+  transition: border-color 0.2s;
+}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #737373;
+  box-shadow: 0 0 0 3px rgba(115,115,115,0.1);
+}
+.form-group textarea { resize: vertical; min-height: 80px; }
+
+.edit-image-preview {
+  position: relative;
+  width: 100%;
+  height: 160px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e5e5e5;
+}
+.edit-image-preview img { width: 100%; height: 100%; object-fit: cover; }
+.btn-remove-img {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(0,0,0,0.6); color: #fff;
+  border: none; border-radius: 6px; padding: 4px 10px;
+  font-size: 11px; cursor: pointer;
+}
+.btn-remove-img:hover { background: rgba(0,0,0,0.85); }
+
+.btn-upload-img {
+  padding: 8px 16px;
+  border: 1px dashed #d4d4d4;
+  border-radius: 7px;
+  background: #fafafa;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #1a1a1a;
+  transition: border-color 0.2s, background 0.2s;
+}
+.btn-upload-img:hover { border-color: #737373; background: #f0f0f0; }
+
+.edit-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  border-radius: 7px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
 
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 968px) {
@@ -397,5 +664,6 @@ export default {
   .page-header h1 { font-size: 22px; }
   .product-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
   .card-image { height: 160px; }
+  .form-row { grid-template-columns: 1fr; }
 }
 </style>

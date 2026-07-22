@@ -43,11 +43,21 @@
                 <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
                 <line x1="12" y1="17" x2="12.01" y2="17"></line>
               </svg>
-              <span>Help & Support</span>
+              <span>Help &amp; Support</span>
             </li>
           </ul>
 
           <div class="logout-section">
+            <button @click="showDeleteModal = true" class="btn-delete-account">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6l-1 14H6L5 6"></path>
+                <path d="M10 11v6M14 11v6"></path>
+                <path d="M9 6V4h6v2"></path>
+              </svg>
+              <span>Delete Account</span>
+            </button>
             <button @click="logout" class="logout-btn">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" stroke-width="2">
@@ -92,34 +102,73 @@
           </div>
 
           <div class="details-container">
-            <form class="edit-form">
-              <div class="form-group" v-if="accountType === 'buyer'">
-                <label>Full Name</label>
-                <input type="text" v-model="userProfile.name">
-              </div>
+            <div v-if="editSuccess" class="alert-success">✓ Profile updated successfully.</div>
+            <div v-if="editError" class="alert-error">{{ editError }}</div>
 
-              <div class="form-group" v-if="accountType === 'seller'">
-                <label>Company Name</label>
-                <input type="text" v-model="userProfile.company_name">
-              </div>
+            <form class="edit-form" @submit.prevent="saveProfile">
+              <!-- Buyer fields -->
+              <template v-if="accountType === 'buyer'">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>First Name</label>
+                    <input type="text" v-model="editForm.first_name" />
+                  </div>
+                  <div class="form-group">
+                    <label>Last Name</label>
+                    <input type="text" v-model="editForm.last_name" />
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Phone</label>
+                    <input type="tel" v-model="editForm.phone_number" />
+                  </div>
+                  <div class="form-group">
+                    <label>Age</label>
+                    <input type="number" v-model="editForm.age" min="0" />
+                  </div>
+                </div>
+              </template>
 
-              <div class="form-group">
-                <label>Email</label>
-                <input type="email" v-model="userProfile.email">
-              </div>
+              <!-- Seller fields -->
+              <template v-if="accountType === 'seller'">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Company Name</label>
+                    <input type="text" v-model="editForm.company_name" />
+                  </div>
+                  <div class="form-group">
+                    <label>Contact Number</label>
+                    <input type="tel" v-model="editForm.contact_number" />
+                  </div>
+                </div>
+              </template>
 
-              <div class="form-group">
-                <label>Phone</label>
-                <input type="tel" v-model="userProfile.phone">
-              </div>
-
+              <!-- Shared address fields -->
               <div class="form-group">
                 <label>Address</label>
-                <textarea v-model="userProfile.address"></textarea>
+                <textarea v-model="editForm.address" rows="2"></textarea>
               </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>City</label>
+                  <input type="text" v-model="editForm.city" />
+                </div>
+                <div class="form-group">
+                  <label>Country</label>
+                  <input type="text" v-model="editForm.country" />
+                </div>
+              </div>
+              <div class="form-group half">
+                <label>Pincode</label>
+                <input type="text" v-model="editForm.pincode" />
+              </div>
+
               <div class="form-actions">
-                <button type="button" class="btn-secondary">Cancel</button>
-                <button type="submit" class="btn-primary">Save Changes</button>
+                <button type="button" class="btn-secondary" @click="resetEditForm">Cancel</button>
+                <button type="submit" class="btn-primary" :disabled="saving">
+                  {{ saving ? 'Saving...' : 'Save Changes' }}
+                </button>
               </div>
             </form>
           </div>
@@ -128,7 +177,7 @@
         <!-- Help Tab -->
         <div v-if="activeTab === 'help'" class="tab-content">
           <div class="page-header">
-            <h1>Help & Support</h1>
+            <h1>Help &amp; Support</h1>
             <p class="subtitle">Get assistance with your account</p>
           </div>
 
@@ -148,6 +197,20 @@
         </div>
       </main>
     </div>
+
+    <!-- Delete Account Modal -->
+    <div v-if="showDeleteModal" class="modal-overlay" @click="showDeleteModal = false">
+      <div class="modal-box" @click.stop>
+        <h3>Delete Account</h3>
+        <p>This will <strong>permanently delete</strong> your account and all associated data. This action cannot be undone.</p>
+        <div class="modal-actions">
+          <button @click="showDeleteModal = false" class="btn-secondary">Cancel</button>
+          <button @click="deleteAccount" class="btn-danger" :disabled="deleting">
+            {{ deleting ? 'Deleting...' : 'Yes, Delete My Account' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -163,8 +226,19 @@ export default {
         name: '',
         email: '',
         phone: '',
-        address: ''
-      }
+        address: '',
+        company_name: '',
+        city: '',
+        country: '',
+        pincode: '',
+        age: '',
+      },
+      editForm: {},
+      editSuccess: false,
+      editError: null,
+      saving: false,
+      showDeleteModal: false,
+      deleting: false,
     };
   },
   computed: {
@@ -174,7 +248,6 @@ export default {
     accountType() {
       return this.userProfile.account_type || localStorage.getItem("user_type");
     },
-
     filteredProfile() {
       if (this.accountType === "buyer") {
         return {
@@ -185,7 +258,7 @@ export default {
           City: this.userProfile.city,
           Country: this.userProfile.country,
           Pincode: this.userProfile.pincode,
-          Age: this.userProfile.age
+          Age: this.userProfile.age,
         };
       } else {
         return {
@@ -195,10 +268,10 @@ export default {
           Address: this.userProfile.address,
           City: this.userProfile.city,
           Country: this.userProfile.country,
-          Pincode: this.userProfile.pincode
+          Pincode: this.userProfile.pincode,
         };
       }
-    }
+    },
   },
   methods: {
     async fetchProfile() {
@@ -206,23 +279,98 @@ export default {
         const profileStore = useProfileStore();
         const data = await profileStore.fetchProfile();
         this.userProfile = { ...data };
+        this.buildEditForm(data);
       } catch (error) {
         console.error("Failed to load profile:", error);
+      }
+    },
+
+    buildEditForm(data) {
+      if (this.accountType === 'buyer' || data?.account_type === 'buyer') {
+        const nameParts = (data.name || '').split(' ');
+        this.editForm = {
+          first_name: nameParts[0] || '',
+          last_name: nameParts.slice(1).join(' ') || '',
+          phone_number: data.phone || '',
+          address: data.address || '',
+          city: data.city || '',
+          country: data.country || '',
+          pincode: data.pincode || '',
+          age: data.age || '',
+        };
+      } else {
+        this.editForm = {
+          company_name: data.company_name || '',
+          contact_number: data.phone || '',
+          address: data.address || '',
+          city: data.city || '',
+          country: data.country || '',
+          pincode: data.pincode || '',
+        };
+      }
+    },
+
+    resetEditForm() {
+      this.buildEditForm(this.userProfile);
+      this.editSuccess = false;
+      this.editError = null;
+    },
+
+    async saveProfile() {
+      this.saving = true;
+      this.editSuccess = false;
+      this.editError = null;
+      try {
+        const profileStore = useProfileStore();
+        // Only send non-empty fields
+        const payload = Object.fromEntries(
+          Object.entries(this.editForm).filter(([, v]) => v !== '' && v !== null && v !== undefined)
+        );
+        await profileStore.updateProfile(payload);
+        // Refresh local state
+        const data = profileStore.profile;
+        if (data) {
+          this.userProfile = { ...data };
+          this.buildEditForm(data);
+        }
+        this.editSuccess = true;
+      } catch (err) {
+        this.editError = err.response?.data?.message || err.message || 'Failed to update profile.';
+      } finally {
+        this.saving = false;
+      }
+    },
+
+    async deleteAccount() {
+      this.deleting = true;
+      try {
+        const profileStore = useProfileStore();
+        await profileStore.deleteAccount();
+        // Also clear auth store state
+        const authStore = useAuthStore();
+        if (authStore.logout) authStore.logout();
+        this.$router.push("/signin");
+      } catch (err) {
+        alert(err.response?.data?.message || err.message || 'Failed to delete account.');
+      } finally {
+        this.deleting = false;
+        this.showDeleteModal = false;
       }
     },
 
     formatLabel(key) {
       return key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1');
     },
+
     logout() {
       const authStore = useAuthStore();
       authStore.logout();
       this.$router.push("/signin");
-    }
+    },
   },
   mounted() {
     this.fetchProfile();
-  }
+  },
 };
 </script>
 
@@ -255,6 +403,7 @@ body {
   position: fixed;
   overflow-y: auto;
   border-right: 1px solid #e8e8e0;
+  height: calc(100vh - 70px);
 }
 
 .profile-section {
@@ -334,9 +483,8 @@ body {
 }
 
 .nav-item:hover {
-  background-color: #ffffff;
+  background-color: #f5f5f0;
   transform: translateX(4px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .nav-item.active {
@@ -353,7 +501,28 @@ body {
   padding-top: 24px;
   border-top: 1px solid #e8e8e0;
   margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
+
+.btn-delete-account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  color: #dc2626;
+  font-weight: 500;
+  background-color: transparent;
+  border: 1px solid #fecaca;
+}
+.btn-delete-account svg { stroke: #dc2626; }
+.btn-delete-account:hover { background-color: #fef2f2; border-color: #dc2626; }
 
 .logout-btn {
   display: flex;
@@ -395,15 +564,8 @@ body {
 }
 
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .page-header {
@@ -453,9 +615,7 @@ body {
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
 .info-grid {
@@ -504,13 +664,23 @@ body {
 .edit-form {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.form-group.half {
+  max-width: 240px;
 }
 
 .form-group label {
@@ -520,31 +690,58 @@ body {
 }
 
 .form-group input,
-.form-group textarea {
+.form-group textarea,
+.form-group select {
   padding: 12px 16px;
   border: 1px solid #e8e8e0;
   border-radius: 8px;
   font-size: 15px;
   font-family: inherit;
   transition: all 0.2s ease;
+  width: 100%;
 }
 
 .form-group input:focus,
-.form-group textarea:focus {
+.form-group textarea:focus,
+.form-group select:focus {
   outline: none;
   border-color: #1a1a1a;
   box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.1);
 }
 
+.form-group textarea { resize: vertical; min-height: 80px; }
+
 .form-actions {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: 8px;
 }
 
+/* Alerts */
+.alert-success {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+.alert-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+/* Buttons */
 .btn-primary,
-.btn-secondary {
+.btn-secondary,
+.btn-danger {
   padding: 12px 32px;
   border-radius: 8px;
   font-size: 15px;
@@ -558,128 +755,45 @@ body {
   background-color: #1a1a1a;
   color: #ffffff;
 }
-
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background-color: #000000;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
+.btn-primary:disabled { background: #a3a3a3; cursor: not-allowed; }
 
 .btn-secondary {
   background-color: transparent;
   color: #1a1a1a;
   border: 1px solid #e8e8e0;
 }
+.btn-secondary:hover { background-color: #f5f5f0; }
 
-.btn-secondary:hover {
-  background-color: #f5f5f0;
+.btn-danger {
+  background-color: #dc2626;
+  color: #ffffff;
 }
+.btn-danger:hover:not(:disabled) { background-color: #b91c1c; }
+.btn-danger:disabled { background: #a3a3a3; cursor: not-allowed; }
 
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  color: #6b6b6b;
+/* Delete Modal */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2000;
 }
-
-.empty-state svg {
-  margin-bottom: 24px;
-  stroke: #d0d0d0;
+.modal-box {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 32px;
+  max-width: 440px; width: 90%;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.18);
 }
-
-.empty-state h3 {
-  font-size: 20px;
-  color: #1a1a1a;
-  margin: 0 0 8px 0;
-}
-
-.empty-state p {
-  font-size: 15px;
-  margin: 0;
-}
-
-/* Settings */
-.settings-section {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.settings-section h3 {
-  font-size: 18px;
-  color: #1a1a1a;
-  margin: 0 0 16px 0;
-}
-
-.setting-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 0;
-  border-bottom: 1px solid #f5f5f0;
-}
-
-.setting-item:last-child {
-  border-bottom: none;
-}
-
-.setting-item strong {
-  display: block;
-  color: #1a1a1a;
-  margin-bottom: 4px;
-}
-
-.setting-item p {
-  color: #6b6b6b;
-  font-size: 14px;
-  margin: 0;
-}
-
-/* Toggle Switch */
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 48px;
-  height: 26px;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #e8e8e0;
-  transition: 0.3s;
-  border-radius: 26px;
-}
-
-.slider:before {
-  position: absolute;
-  content: "";
-  height: 20px;
-  width: 20px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: 0.3s;
-  border-radius: 50%;
-}
-
-input:checked+.slider {
-  background-color: #1a1a1a;
-}
-
-input:checked+.slider:before {
-  transform: translateX(22px);
-}
+.modal-box h3 { font-size: 18px; font-weight: 600; color: #1a1a1a; margin: 0 0 12px 0; }
+.modal-box p { font-size: 14px; color: #6b6b6b; margin: 0 0 28px 0; line-height: 1.6; }
+.modal-box p strong { color: #dc2626; }
+.modal-actions { display: flex; gap: 12px; justify-content: flex-end; }
 
 /* Help Section */
 .help-section {
@@ -702,59 +816,24 @@ input:checked+.slider:before {
 
 /* Responsive */
 @media (max-width: 968px) {
-  .sidebar {
-    width: 260px;
-  }
-
-  .content {
-    margin-left: 260px;
-    padding: 40px 32px;
-  }
+  .sidebar { width: 260px; }
+  .content { margin-left: 260px; padding: 40px 32px; }
 }
 
 @media (max-width: 768px) {
-  .container {
-    flex-direction: column;
-  }
-
+  .container { flex-direction: column; }
   .sidebar {
-    width: 100%;
-    position: relative;
-    height: auto;
-    padding: 32px 24px;
-    border-right: none;
-    border-bottom: 1px solid #e8e8e0;
+    width: 100%; position: relative;
+    height: auto; padding: 32px 24px;
+    border-right: none; border-bottom: 1px solid #e8e8e0;
   }
-
-  .content {
-    margin-left: 0;
-    padding: 32px 24px;
-  }
-
-  .details-container {
-    padding: 32px 24px;
-  }
-
-  .page-header h1 {
-    font-size: 28px;
-  }
-
-  .info-card {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .info-value {
-    text-align: left;
-  }
-
-  .form-actions {
-    flex-direction: column;
-  }
-
-  .btn-primary,
-  .btn-secondary {
-    width: 100%;
-  }
+  .content { margin-left: 0; padding: 32px 24px; }
+  .details-container { padding: 32px 24px; }
+  .page-header h1 { font-size: 28px; }
+  .info-card { flex-direction: column; gap: 8px; }
+  .info-value { text-align: left; }
+  .form-row { grid-template-columns: 1fr; }
+  .form-actions { flex-direction: column; }
+  .btn-primary, .btn-secondary, .btn-danger { width: 100%; }
 }
 </style>
