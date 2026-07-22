@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError, PermissionDenied, NotFoun
 from .models import Buyer, Seller, Product, Cart, CartItem, Wishlist
 from .serializers import (
     ProductSerializer,
+    ProductCreateSerializer,
     SignInSerializer,
     BuyerSignupSerializer,
     SellerSignupSerializer,
