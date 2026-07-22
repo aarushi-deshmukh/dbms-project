@@ -340,31 +340,22 @@ def profile(request):
 @api_view(["POST"])
 @permission_classes([IsAuthenticated, IsSeller])
 def add_product(request):
-
     try:
-        # ✅ get seller (IMPORTANT)
         seller = Seller.objects.get(user=request.user)
 
-        product = Product.objects.create(
-            seller=seller,
-            name=request.data.get("name"),
-            description=request.data.get("description"),
-            price=request.data.get("price"),
-            stock=request.data.get("quantity"),
-            category=request.data.get("category"),
-            image=request.FILES.get("image")
-        )
+        serializer = ProductCreateSerializer(data=request.data)
 
-        return Response({
-            "success": True,
-            "product_id": product.id
-        })
+        if serializer.is_valid():
+            serializer.save(seller=seller)
+            return Response({
+                "success": True,
+                "product_id": serializer.instance.id
+            })
+
+        return Response(serializer.errors, status=400)
 
     except Seller.DoesNotExist:
         return Response({"error": "Seller not found"}, status=400)
-
-    except Exception as e:
-        return Response({"error": str(e)}, status=400)
 
 @api_view(["GET"])
 def get_product(request, id):
@@ -583,4 +574,4 @@ def seller_stats(request):
     Returns calculated portfolio analytics for the seller. Thin controller.
     """
     stats_data = services.get_seller_stats(request.user)
-    return Response(stats_data)
+    return Response(stats_data)
