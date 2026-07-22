@@ -1,5 +1,5 @@
 # Multi-stage build for production-ready Django application
-FROM python:3.11-slim as builder
+FROM python:3.12-slim as builder
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -14,10 +14,9 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn==21.2.0
-
+RUN pip install --no-cache-dir -r requirements.txt
 # Production stage
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # Install runtime dependencies only
 RUN apt-get update && apt-get install -y --no-install-recommends \
